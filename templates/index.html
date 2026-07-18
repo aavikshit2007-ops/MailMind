@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MailMind — AI Email Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a0f; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: white; overflow-x: hidden; }
+
+    #video-bg {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0; opacity: 0.25;
+      filter: saturate(1.5) hue-rotate(220deg);
+    }
+    #video-overlay {
+      position: fixed; inset: 0; z-index: 1;
+      background:
+        radial-gradient(ellipse 90% 60% at 50% 0%, rgba(99,102,241,0.2) 0%, transparent 70%),
+        linear-gradient(to bottom, rgba(10,10,15,0.6) 0%, rgba(10,10,15,0.25) 40%, rgba(10,10,15,0.85) 100%);
+    }
+
+    #logo-canvas { display: block; width: 40px; height: 40px; cursor: pointer; flex-shrink: 0; }
+
+    nav {
+      position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 48px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      background: rgba(10,10,15,0.45);
+    }
+    .logo-wrap { display: flex; align-items: center; gap: 10px; }
+    .logo-text {
+      font-size: 18px; font-weight: 700; letter-spacing: -0.3px;
+      background: linear-gradient(135deg, #a5b4fc, #818cf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-right { display: flex; align-items: center; gap: 8px; }
+
+    /* Buttons */
+    .btn-glass {
+      padding: 8px 18px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; color: rgba(255,255,255,0.65);
+      font-size: 13px; font-weight: 500; text-decoration: none;
+      transition: all 0.2s; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-glass:hover { background: rgba(255,255,255,0.1); color: white; }
+    .btn-indigo {
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 10px; color: white;
+      font-size: 13px; font-weight: 600; text-decoration: none;
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+      box-shadow: 0 0 20px rgba(99,102,241,0.3);
+    }
+    .btn-indigo:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Hero */
+    .hero { position: relative; z-index: 10; max-width: 900px; margin: 0 auto; padding: 110px 40px 70px; text-align: center; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 100px; padding: 6px 18px; font-size: 12px;
+      color: rgba(255,255,255,0.55); margin-bottom: 36px;
+    }
+    .badge .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #4ade80;
+      box-shadow: 0 0 6px #4ade80; animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100% { opacity:1; transform:scale(1); }
+      50% { opacity:0.5; transform:scale(0.8); }
+    }
+
+    h1 { font-size: clamp(40px,6vw,70px); font-weight: 800; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 24px; }
+    .gradient-text {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #a855f7 80%, #c084fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero-sub { font-size: 18px; color: rgba(255,255,255,0.42); max-width: 540px; margin: 0 auto 48px; line-height: 1.72; }
+
+    .cta-google {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: white; color: #111; font-size: 16px; font-weight: 700;
+      padding: 15px 34px; border-radius: 14px; text-decoration: none;
+      transition: all 0.25s;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 8px 40px rgba(99,102,241,0.22);
+    }
+    .cta-google:hover { background: #f0f0ff; transform: translateY(-2px); box-shadow: 0 12px 48px rgba(99,102,241,0.35); }
+    .cta-google img { width: 20px; height: 20px; }
+
+    .cta-dash {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;
+      font-size: 16px; font-weight: 700;
+      padding: 15px 34px; border-radius: 14px; text-decoration: none;
+      transition: all 0.25s; box-shadow: 0 0 32px rgba(99,102,241,0.35);
+    }
+    .cta-dash:hover { opacity: 0.9; transform: translateY(-2px); }
+
+    .sec-note { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+    /* Stats */
+    .stats-row { position: relative; z-index: 10; display: flex; justify-content: center; gap: 14px; padding: 0 40px 80px; flex-wrap: wrap; }
+    .stat-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      backdrop-filter: blur(16px); border-radius: 16px; padding: 20px 30px; text-align: center;
+      min-width: 150px; transition: all 0.25s;
+    }
+    .stat-card:hover { border-color: rgba(99,102,241,0.3); transform: translateY(-3px); }
+    .stat-num { font-size: 28px; font-weight: 800; letter-spacing: -1px; background: linear-gradient(135deg, #a5b4fc, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 11px; color: rgba(255,255,255,0.38); margin-top: 4px; font-weight: 500; }
+
+    .section-divider { position: relative; z-index: 10; max-width: 180px; margin: 0 auto 80px; height: 1px; background: linear-gradient(to right, transparent, rgba(99,102,241,0.4), transparent); }
+
+    /* Features */
+    .feat-section { position: relative; z-index: 10; max-width: 1080px; margin: 0 auto; padding: 0 40px 100px; }
+    .feat-eyebrow { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #818cf8; margin-bottom: 14px; }
+    .feat-title { text-align: center; font-size: clamp(28px,4vw,42px); font-weight: 800; letter-spacing: -1px; margin-bottom: 56px; }
+    .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media(max-width:768px) { .feat-grid { grid-template-columns: 1fr; } }
+
+    .feat-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px; padding: 28px; transition: all 0.25s; position: relative; overflow: hidden;
+    }
+    .feat-card::after {
+      content:''; position: absolute; inset:0;
+      background: radial-gradient(ellipse 60% 50% at 50% -5%, rgba(99,102,241,0.12), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .feat-card:hover { border-color: rgba(99,102,241,0.22); transform: translateY(-4px); }
+    .feat-card:hover::after { opacity: 1; }
+    .feat-icon { width: 44px; height: 44px; border-radius: 12px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; font-size: 18px; color: #818cf8; }
+    .feat-card h3 { font-size: 15px; font-weight: 600; color: white; margin-bottom: 10px; }
+    .feat-card p { font-size: 13px; color: rgba(255,255,255,0.42); line-height: 1.7; }
+
+    /* Security */
+    .sec-block { position: relative; z-index: 10; max-width: 740px; margin: 0 auto 100px; padding: 0 40px; }
+    .sec-inner { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 24px; padding: 36px; display: flex; gap: 24px; }
+    .sec-icon { width: 48px; height: 48px; flex-shrink: 0; border-radius: 14px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); display: flex; align-items: center; justify-content: center; color: #818cf8; font-size: 20px; margin-top: 2px; }
+    .sec-inner h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+    .sec-list { list-style: none; }
+    .sec-list li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,0.48); padding: 5px 0; }
+    .sec-list li i { color: #4ade80; font-size: 10px; }
+
+    footer { position: relative; z-index: 10; text-align: center; padding: 28px 40px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 12px; color: rgba(255,255,255,0.18); }
+  </style>
+</head>
+<body>
+
+  <!-- Video bg -->
+  <video id="video-bg" autoplay muted loop playsinline>
+    <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_171521_25968ba2-b594-4b32-aab7-f6b69398a6fa.mp4" type="video/mp4"/>
+  </video>
+  <div id="video-overlay"></div>
+
+  <!-- Navbar — JS handles logged-in vs logged-out states -->
+  <nav>
+    <div class="logo-wrap">
+      <canvas id="logo-canvas"></canvas>
+      <span class="logo-text">MailMind</span>
+    </div>
+    <div class="nav-right" id="nav-right"></div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="badge"><span class="dot"></span> Powered by LangChain + Groq</div>
+    <h1>Your inbox,<br/><span class="gradient-text">intelligently managed</span></h1>
+    <p class="hero-sub">Connect your Gmail and let AI summarize, categorize, and prioritize your emails — automatically every night at 12 AM.</p>
+    <div id="hero-cta"></div>
+    <p class="sec-note"><i class="fa-solid fa-lock" style="font-size:10px"></i> Read-only access · No emails stored permanently · OAuth 2.0 secured</p>
+  </section>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num">20+</div><div class="stat-label">Emails analyzed</div></div>
+    <div class="stat-card"><div class="stat-num">12 AM</div><div class="stat-label">Nightly digest</div></div>
+    <div class="stat-card"><div class="stat-num">&lt;3s</div><div class="stat-label">Groq AI response</div></div>
+    <div class="stat-card"><div class="stat-num">100%</div><div class="stat-label">Read-only access</div></div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- Features -->
+  <section class="feat-section">
+    <p class="feat-eyebrow">Features</p>
+    <h2 class="feat-title">Everything your inbox needs</h2>
+    <div class="feat-grid">
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-layer-group"></i></div><h3>Smart categorization</h3><p>AI sorts every email into Jobs, Finance, Social, Newsletters, Security, and more — automatically.</p></div>
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-star"></i></div><h3>Priority inbox</h3><p>Meeting invites, interviews, and deadlines are flagged as high priority so nothing important slips.</p></div>
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-moon"></i></div><h3>Nightly digest</h3><p>Every night at 12 AM your inbox is summarized automatically. Wake up to clarity, not chaos.</p></div>
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-calendar-check"></i></div><h3>Meeting tracker</h3><p>Upcoming meetings and interviews extracted from emails and shown in a clean, scannable timeline.</p></div>
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-shield-halved"></i></div><h3>Fully secure</h3><p>OAuth 2.0 Google login. Read-only access. No passwords stored. Revoke access anytime.</p></div>
+      <div class="feat-card"><div class="feat-icon"><i class="fa-solid fa-bolt"></i></div><h3>Instant summary</h3><p>Hit "Summarize now" anytime — Groq AI processes your full inbox in under 3 seconds.</p></div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <div class="sec-block">
+    <div class="sec-inner">
+      <div class="sec-icon"><i class="fa-solid fa-lock"></i></div>
+      <div>
+        <h3>How your data stays safe</h3>
+        <ul class="sec-list">
+          <li><i class="fa-solid fa-check"></i> OAuth 2.0 — we never see your Google password</li>
+          <li><i class="fa-solid fa-check"></i> Read-only Gmail scope — cannot send, delete, or modify emails</li>
+          <li><i class="fa-solid fa-check"></i> Tokens stored in server session, never in a database</li>
+          <li><i class="fa-solid fa-check"></i> Revoke access anytime at myaccount.google.com/permissions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>&copy; 2025 MailMind. Built with LangChain + Groq. All rights reserved.</footer>
+
+  <!-- 3D Logo -->
+  <script>
+  (function() {
+    const canvas = document.getElementById('logo-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(40, 40);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.z = 3.2;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+    const l1 = new THREE.DirectionalLight(0x818cf8, 2.8);
+    l1.position.set(2, 3, 4); scene.add(l1);
+    const l2 = new THREE.DirectionalLight(0xa855f7, 1.6);
+    l2.position.set(-2, -1, 2); scene.add(l2);
+
+    const mainMesh = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.9, 1),
+      new THREE.MeshStandardMaterial({ color: 0x4f46e5, metalness: 0.65, roughness: 0.2, emissive: 0x312e81, emissiveIntensity: 0.35 })
+    );
+    scene.add(mainMesh);
+
+    const wireMesh = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.93, 1),
+      new THREE.MeshBasicMaterial({ color: 0x818cf8, wireframe: true, transparent: true, opacity: 0.16 })
+    );
+    scene.add(wireMesh);
+
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.17, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xa855f7, metalness: 0.85, roughness: 0.1, emissive: 0x7e22ce, emissiveIntensity: 0.55 })
+    );
+    scene.add(orb);
+
+    let t = 0;
+    (function loop() {
+      requestAnimationFrame(loop);
+      t += 0.016;
+      mainMesh.rotation.y = t * 0.55;
+      mainMesh.rotation.x = Math.sin(t * 0.28) * 0.28;
+      wireMesh.rotation.y = mainMesh.rotation.y;
+      wireMesh.rotation.x = mainMesh.rotation.x;
+      orb.position.set(Math.cos(t * 1.1) * 1.1, Math.sin(t * 0.75) * 0.45, Math.sin(t * 1.1) * 0.4);
+      renderer.render(scene, camera);
+    })();
+
+    canvas.addEventListener('click', () => {
+      let n = 0;
+      const id = setInterval(() => { mainMesh.rotation.y += 0.2; wireMesh.rotation.y += 0.2; if (++n > 25) clearInterval(id); }, 16);
+    });
+  })();
+  </script>
+
+  <!-- Auth state — comes from Flask session via render_template -->
+  <script>
+    const LOGGED_IN = {{ 'true' if logged_in else 'false' }};
+    const USER_EMAIL = "{{ user_email or '' }}";
+
+    const navRight = document.getElementById('nav-right');
+    const heroCta  = document.getElementById('hero-cta');
+
+    if (LOGGED_IN) {
+      navRight.innerHTML = `
+        <span style="font-size:13px;color:rgba(255,255,255,0.38);margin-right:4px">${USER_EMAIL}</span>
+        <a href="/dashboard" class="btn-indigo"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+        <a href="/logout" class="btn-glass"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>`;
+      heroCta.innerHTML = `<a href="/dashboard" class="cta-dash"><i class="fa-solid fa-gauge"></i> Open dashboard</a>`;
+    } else {
+      navRight.innerHTML = `
+        <a href="/login" class="btn-indigo"><img src="https://www.google.com/favicon.ico" style="width:14px;height:14px" alt=""/> Connect with Google</a>`;
+      heroCta.innerHTML = `
+        <a href="/login" class="cta-google">
+          <img src="https://www.google.com/favicon.ico" alt="Google"/> Connect with Google
+        </a>`;
+    }
+  </script>
+</body>
+</html>

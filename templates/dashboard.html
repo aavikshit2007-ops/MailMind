@@ -1,0 +1,2631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MailMind - AI Email Workstation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #080710; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0d0c1d; }
+        ::-webkit-scrollbar-thumb { background: #252142; border-radius: 10px; }
+
+        .card-perspective {
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+        }
+        .deck-card {
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7), 0 0 30px rgba(99,102,241,0.1);
+            will-change: transform, opacity, filter;
+        }
+        .deck-card[data-view]:hover, #digest-card:hover {
+            border-color: rgba(165,180,252,0.6) !important;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7), 0 0 35px rgba(139,92,246,0.35);
+        }
+        @keyframes pulseGlow { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:.8;transform:scale(1.05)} }
+        .glow-bg { animation: pulseGlow 8s infinite ease-in-out; }
+        @keyframes floatOrb { 0%,100%{transform:translateY(0px) scale(1)} 50%{transform:translateY(-6px) scale(1.05)} }
+        .orb-logo { animation: floatOrb 4s ease-in-out infinite; filter: drop-shadow(0 0 20px rgba(139,92,246,.8)); }
+
+        .calendar-day { width:32px;height:32px;display:flex;align-items:center;justify-content:center;margin:auto;border-radius:10px;cursor:pointer;transition:.2s;position:relative; }
+        .calendar-day:hover { background:#1a1733; }
+        .calendar-today { background:#6366f1;color:white;box-shadow:0 0 16px rgba(99,102,241,.6); }
+        .calendar-has-meeting::after { content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:4px; height:4px; border-radius:50%; background:#34d399; }
+        .calendar-today.calendar-has-meeting::after { background:#fff; }
+        .calendar-selected { box-shadow: 0 0 0 2px #818cf8 inset; background:#1a1733; color:#fff; }
+        .calendar-today.calendar-selected { box-shadow: 0 0 0 2px #fff inset; }
+        .calendar-has-note::before { content:''; position:absolute; top:3px; left:50%; transform:translateX(-50%); width:4px; height:4px; border-radius:50%; background:#fbbf24; }
+        .calendar-today.calendar-has-note::before { background:#fff; }
+
+        .view-panel { display: none; }
+        .view-panel.active { display: flex; flex-direction: column; height: 100%; }
+
+        .nav-item { display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:12px;color:#94a3b8;transition:all .2s;cursor:pointer; }
+        .nav-item:hover { background:#16142a;color:#e2e8f0; }
+        .nav-item.active { background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);color:white;font-weight:500; }
+        .nav-item.active .nav-icon { color:#818cf8; }
+
+        .email-row { transition: background .15s; cursor:pointer; }
+        .email-row:hover { background: #0f0e22; }
+
+        .badge-high { background:#3f1515;color:#f87171;border:1px solid #7f1d1d; }
+        .badge-med  { background:#3f2a00;color:#fbbf24;border:1px solid #78350f; }
+        .badge-low  { background:#0f2a1a;color:#34d399;border:1px solid #064e3b; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 0.8s linear infinite; }
+
+        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+        .skeleton { background: linear-gradient(90deg, #1a1733 25%, #252142 50%, #1a1733 75%); background-size: 200%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+
+        /* Streaming typewriter cursor */
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        .cursor { display:inline-block; width:2px; height:1em; background:#818cf8; margin-left:2px; animation: blink 0.8s infinite; vertical-align:text-bottom; }
+
+        /* Search bar */
+        .search-bar-wrap { position:relative; display:flex; align-items:center; margin-bottom:12px; }
+        .search-bar-wrap input { width:100%; background:#0a0919; border:1px solid #1f1c38; border-radius:999px; padding:8px 38px 8px 36px; font-size:12px; color:#e2e8f0; outline:none; transition:border-color .2s; }
+        .search-bar-wrap input:focus { border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.12); }
+        .search-bar-wrap input::placeholder { color:#475569; }
+        .search-icon { position:absolute; left:12px; color:#475569; pointer-events:none; }
+        .search-filter-btn { position:absolute; right:10px; color:#475569; cursor:pointer; padding:2px; border-radius:6px; transition:color .15s; }
+        .search-filter-btn:hover { color:#818cf8; }
+        .search-shimmer { pointer-events:none; position:absolute; inset:0; border-radius:16px; background:linear-gradient(90deg,transparent 25%,rgba(99,102,241,0.06) 50%,transparent 75%); background-size:200%; animation:shimmer 1.2s infinite; }
+
+        /* Reply compose box */
+        .reply-compose { background:#0a0919; border:1px solid #262247; border-radius:14px; padding:14px; margin:0 16px 12px; display:none; flex-direction:column; gap:10px; }
+        .reply-compose.open { display:flex; }
+        .reply-compose textarea { background:#06050f; border:1px solid #1f1c38; border-radius:10px; padding:10px; font-size:12px; color:#e2e8f0; resize:vertical; min-height:90px; outline:none; font-family:inherit; line-height:1.6; transition:border-color .2s; }
+        .reply-compose textarea:focus { border-color:#6366f1; }
+        .reply-compose .quote-block { font-size:11px; color:#475569; border-left:2px solid #2d2a50; padding-left:10px; white-space:pre-wrap; max-height:60px; overflow:hidden; }
+        .reply-btn-send { background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; border:none; border-radius:10px; padding:7px 18px; font-size:11px; font-weight:600; cursor:pointer; transition:opacity .15s; display:flex; align-items:center; gap:6px; }
+        .reply-btn-send:hover { opacity:.88; }
+        .reply-btn-send:disabled { opacity:.4; cursor:not-allowed; }
+        .reply-btn-cancel { background:transparent; border:1px solid #262247; color:#64748b; border-radius:10px; padding:7px 14px; font-size:11px; cursor:pointer; transition:color .15s; }
+        .reply-btn-cancel:hover { color:#94a3b8; }
+
+        /* Category tabs */
+        .cat-tab { padding:6px 14px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid transparent; transition:all .2s; white-space:nowrap; }
+        .cat-tab.active { background:rgba(99,102,241,0.2); border-color:rgba(99,102,241,0.4); color:white; }
+        .cat-tab:not(.active) { background:rgba(255,255,255,0.04); color:#64748b; }
+        .cat-tab:not(.active):hover { color:#94a3b8; background:rgba(255,255,255,0.07); }
+
+        /* Create Meeting platform picker */
+        .meeting-platform-btn { background:rgba(255,255,255,0.04); border-color:#1f1c38; color:#64748b; }
+        .meeting-platform-btn:hover { background:rgba(255,255,255,0.07); color:#94a3b8; }
+        .meeting-platform-btn.active { background:rgba(56,189,248,0.15); border-color:rgba(56,189,248,0.5); color:#7dd3fc; }
+
+        /* Streaming markdown-ish render */
+        .stream-output h2 { font-size:13px; font-weight:700; color:#a5b4fc; margin:16px 0 8px; border-bottom:1px solid #1f1c38; padding-bottom:4px; }
+        .stream-output h3 { font-size:12px; font-weight:600; color:#c4b5fd; margin:10px 0 4px; }
+        .stream-output ul { margin:4px 0 8px 16px; }
+        .stream-output li { margin:3px 0; }
+        .stream-output strong { color:#e2e8f0; font-weight:600; }
+        .stream-output p { margin:4px 0; }
+
+        /* Modal */
+        .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px; }
+        .modal-box { background:#0d0c1d;border:1px solid #262247;border-radius:20px;width:100%;max-width:680px;max-height:85vh;display:flex;flex-direction:column;position:relative; }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen overflow-x-hidden flex p-4 gap-4 h-screen max-h-screen">
+
+    <!-- BACKGROUND GLOW -->
+    <div class="fixed top-1/4 left-1/3 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none glow-bg"></div>
+    <div class="fixed bottom-1/4 right-1/4 w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[140px] pointer-events-none glow-bg" style="animation-delay:-4s"></div>
+
+    <!-- ═══════════════ LEFT SIDEBAR ═══════════════ -->
+    <aside class="w-60 bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl flex flex-col justify-between p-4 backdrop-blur-xl shrink-0">
+        <div>
+            <div class="flex items-center gap-3 mb-6 px-1">
+                <div class="w-9 h-9 rounded-full border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.4)] bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center orb-logo shrink-0">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base text-white leading-tight">MailMind</h1>
+                    <p class="text-[10px] text-indigo-400 font-medium">AI Email Workstation</p>
+                </div>
+            </div>
+
+            <nav class="space-y-1" id="sidebar-nav">
+                <div class="nav-item active" data-view="overview">
+                    <div class="flex items-center gap-2.5"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5 nav-icon text-indigo-400"></i><span class="text-sm">Overview</span></div>
+                </div>
+                <div class="nav-item" data-view="assistant">
+                    <div class="flex items-center gap-2.5"><i data-lucide="bot" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">AI Assistant</span></div>
+                    <span class="text-[9px] bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-bold">Agent</span>
+                </div>
+                <div class="nav-item" data-view="all-emails">
+                    <div class="flex items-center gap-2.5"><i data-lucide="mail" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">All Emails</span></div>
+                    <span id="nav-badge-total" class="text-xs bg-[#1f1c38] text-indigo-300 px-2 py-0.5 rounded-md font-semibold">–</span>
+                </div>
+                <div class="nav-item" data-view="unread">
+                    <div class="flex items-center gap-2.5"><i data-lucide="circle-dot" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Unread</span></div>
+                    <span id="nav-badge-unread" class="text-xs bg-[#1f1c38] text-purple-300 px-2 py-0.5 rounded-md font-semibold">–</span>
+                </div>
+                <div class="nav-item" data-view="important">
+                    <div class="flex items-center gap-2.5"><i data-lucide="star" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Important</span></div>
+                    <span id="nav-badge-important" class="text-xs bg-[#1f1c38] text-amber-300 px-2 py-0.5 rounded-md font-semibold">–</span>
+                </div>
+                <div class="nav-item" data-view="sent">
+                    <div class="flex items-center gap-2.5"><i data-lucide="send" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Sent</span></div>
+                    <span id="nav-badge-sent" class="text-xs bg-[#1f1c38] text-sky-300 px-2 py-0.5 rounded-md font-semibold">–</span>
+                </div>
+                <div class="nav-item" data-view="upcoming">
+                    <div class="flex items-center gap-2.5"><i data-lucide="calendar-days" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Meetings</span></div>
+                    <span id="nav-badge-meetings" class="text-xs bg-[#1f1c38] text-emerald-300 px-2 py-0.5 rounded-md font-semibold">–</span>
+                </div>
+                <div class="nav-item" data-view="categorize">
+                    <div class="flex items-center gap-2.5"><i data-lucide="layers" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Categorize</span></div>
+                    <span class="text-[9px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded-md font-bold">AI</span>
+                </div>
+                <div class="nav-item" data-view="summarize">
+                    <div class="flex items-center gap-2.5"><i data-lucide="brain-circuit" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">AI Summarize</span></div>
+                    <span class="text-[9px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded-md font-bold">AI</span>
+                </div>
+                <div class="nav-item" data-view="analytics">
+                    <div class="flex items-center gap-2.5"><i data-lucide="bar-chart-3" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Analytics</span></div>
+                </div>
+                <div class="nav-item" data-view="settings">
+                    <div class="flex items-center gap-2.5"><i data-lucide="settings" class="w-3.5 h-3.5 nav-icon"></i><span class="text-sm">Settings</span></div>
+                </div>
+            </nav>
+        </div>
+
+        <div class="space-y-3">
+            <div class="p-3 bg-[#110f24] border border-[#211e3b] rounded-xl flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden">
+                        {% if user_pic %}<img src="{{ user_pic }}" alt="{{ user_name or 'User' }}" class="w-full h-full object-cover">
+                        {% else %}{{ (user_name or 'U')[0]|upper }}{% endif %}
+                    </div>
+                    <div class="min-w-0">
+                        <h4 class="text-xs font-semibold text-white truncate">{{ user_name or 'User' }}</h4>
+                        <p class="text-[10px] text-purple-400 truncate">{{ user_email or '' }}</p>
+                    </div>
+                </div>
+                <a href="/logout" class="text-slate-500 hover:text-red-400"><i data-lucide="log-out" class="w-3.5 h-3.5"></i></a>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-400 px-1">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+                <span>Connected · Read-only</span>
+            </div>
+            <button id="open-compose-btn" class="w-full py-2.5 px-3 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl font-semibold text-xs transition flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(56,189,248,0.25)]">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Compose
+            </button>
+            <button id="generate-digest-btn" class="w-full py-2 px-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-medium text-xs transition flex items-center justify-center gap-2">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Generate AI Digest
+            </button>
+        </div>
+    </aside>
+
+    <!-- ═══════════════ CENTER MAIN ═══════════════ -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- VIEW: OVERVIEW -->
+        <div id="view-overview" class="view-panel active">
+            <header class="flex justify-between items-center mb-4 shrink-0">
+                <div>
+                    <h2 class="text-2xl font-bold text-white tracking-tight">Overview</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Welcome back! Your AI-powered inbox awaits.</p>
+                </div>
+            </header>
+            <div class="flex-1 flex items-center justify-center relative px-12 select-none">
+                <div class="card-perspective w-full max-w-xl h-full flex items-center justify-center relative -mt-8">
+                    <div class="deck-card absolute w-full rounded-2xl p-6 border text-white aspect-[1.8/1] cursor-pointer" data-view="unread" style="--ty:-140px;--tz:-120px;background:linear-gradient(135deg,#0e272a,#061214);border-color:#1a4247">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-teal-400 bg-teal-950/40 px-2.5 py-1 rounded-md border border-teal-800/30">MailMind</span><i data-lucide="activity" class="w-4 h-4 text-teal-500"></i></div>
+                        <div class="mt-4"><p class="text-xs text-teal-400 font-medium">Unread</p><h3 id="stat-unread" class="text-3xl font-extrabold text-white mt-1">–</h3></div>
+                    </div>
+                    <div class="deck-card absolute w-full rounded-2xl p-6 border text-white aspect-[1.8/1] cursor-pointer" data-view="important" style="--ty:-70px;--tz:-60px;background:linear-gradient(135deg,#1f140a,#0e0905);border-color:#3d2612">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-amber-500 bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-800/30">MailMind</span><i data-lucide="star" class="w-4 h-4 text-amber-500"></i></div>
+                        <div class="mt-4"><p class="text-xs text-amber-400 font-medium">Important</p><h3 id="stat-important" class="text-3xl font-extrabold text-white mt-1">–</h3></div>
+                    </div>
+                    <div class="deck-card absolute w-full rounded-2xl p-7 border text-white aspect-[1.8/1] z-10 cursor-pointer" data-view="all-emails" style="--ty:0px;--tz:0px;background:linear-gradient(135deg,#1e1b4b,#311042 50%,#110c24);border-color:#3b285c">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-indigo-300 bg-indigo-950/50 px-3 py-1 rounded-md border border-indigo-500/30">MailMind</span></div>
+                        <div class="mt-6 flex items-end justify-between">
+                            <div><p class="text-xs text-indigo-300 font-medium">Total Emails</p><h3 class="text-4xl font-black text-white mt-1" id="stat-total">–</h3></div>
+                            <div class="p-2.5 bg-indigo-600/20 border border-indigo-500/30 rounded-xl"><i data-lucide="mail" class="w-5 h-5 text-indigo-300"></i></div>
+                        </div>
+                    </div>
+                    <div class="deck-card absolute w-full rounded-2xl p-6 border text-white aspect-[1.8/1] cursor-pointer" data-view="sent" style="--ty:35px;--tz:-90px;background:linear-gradient(135deg,#0a1f33,#06101c);border-color:#1a3a52">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-sky-400 bg-sky-950/40 px-2.5 py-1 rounded-md border border-sky-800/30">MailMind</span><i data-lucide="send" class="w-4 h-4 text-sky-400"></i></div>
+                        <div class="mt-4"><p class="text-xs text-sky-400 font-medium">Sent</p><h3 id="stat-sent" class="text-3xl font-extrabold text-white mt-1">–</h3></div>
+                    </div>
+                    <div class="deck-card absolute w-full rounded-2xl p-6 border text-white aspect-[1.8/1] cursor-pointer" id="digest-card" style="--ty:105px;--tz:-150px;background:linear-gradient(135deg,#141b36,#0a0d1a);border-color:#222b54">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-blue-400 bg-blue-950/40 px-2.5 py-1 rounded-md border border-blue-800/30">MailMind</span><i data-lucide="sparkles" class="w-4 h-4 text-blue-400"></i></div>
+                        <div class="mt-4"><p class="text-xs text-blue-400 font-medium">AI Digest</p><h3 class="text-2xl font-extrabold text-white mt-1">Generate now →</h3></div>
+                    </div>
+                    <div class="deck-card absolute w-full rounded-2xl p-6 border text-white aspect-[1.8/1] cursor-pointer" data-view="upcoming" style="--ty:175px;--tz:-210px;background:linear-gradient(135deg,#1c1024,#0c0710);border-color:#361f45">
+                        <div class="flex justify-between items-start"><span class="text-[10px] uppercase font-bold tracking-widest text-purple-400 bg-purple-950/40 px-2.5 py-1 rounded-md border border-purple-800/30">MailMind</span><i data-lucide="calendar" class="w-4 h-4 text-purple-400"></i></div>
+                        <div class="mt-4"><p class="text-xs text-purple-400 font-medium">Meetings (AI)</p><h3 id="stat-meetings" class="text-3xl font-extrabold text-white mt-1">–</h3></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: AI ASSISTANT (Agentic AI - LangChain + Groq) -->
+        <div id="view-assistant" class="view-panel">
+            <header class="flex justify-between items-center mb-4 shrink-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-2xl font-bold text-white">AI Assistant</h2>
+                        <span class="text-[9px] bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md font-bold">Agentic · LangChain</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">Ask in plain English — the agent decides which tool to call: important emails, meeting detection, summaries, or creating calendar events</p>
+                </div>
+            </header>
+
+            <div class="flex-1 flex flex-col bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl overflow-hidden">
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div class="flex flex-col items-center justify-center h-full py-10 text-slate-500 text-center">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center mb-3">
+                            <i data-lucide="bot" class="w-6 h-6 text-emerald-400"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-300">MailMind Agent</p>
+                        <p class="text-xs mt-1 opacity-60 max-w-sm">Try: "What are my important emails?" · "Any meetings coming up?" · "Create a meeting tomorrow 3pm with a friend"</p>
+                        <div class="flex flex-wrap justify-center gap-2 mt-4">
+                            <button class="chat-suggestion text-[11px] bg-[#16142a] hover:bg-[#1f1c38] border border-[#211e3b] text-slate-300 px-3 py-1.5 rounded-full transition">Show my important emails</button>
+                            <button class="chat-suggestion text-[11px] bg-[#16142a] hover:bg-[#1f1c38] border border-[#211e3b] text-slate-300 px-3 py-1.5 rounded-full transition">Detect upcoming meetings</button>
+                            <button class="chat-suggestion text-[11px] bg-[#16142a] hover:bg-[#1f1c38] border border-[#211e3b] text-slate-300 px-3 py-1.5 rounded-full transition">Summarize my inbox</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-[#1f1c38] p-3 shrink-0">
+                    <form id="chat-form" class="flex items-center gap-2">
+                        <input id="chat-input" type="text" autocomplete="off" placeholder="Ask the agent anything about your inbox or calendar…"
+                               class="flex-1 bg-[#16142a] border border-[#211e3b] rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50" />
+                        <button type="submit" id="chat-send-btn" class="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 flex items-center justify-center transition disabled:opacity-50">
+                            <i data-lucide="send" class="w-4 h-4 text-white"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: ALL EMAILS -->
+        <div id="view-all-emails" class="view-panel">
+            <header class="flex justify-between items-center mb-3 shrink-0">
+                <div><h2 class="text-2xl font-bold text-white">All Emails</h2><p class="text-xs text-slate-400 mt-0.5">Click any email to read it · Summarize button for AI digest</p></div>
+                <button onclick="loadEmails('all')" class="flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/30 px-4 py-2 rounded-xl text-xs font-medium hover:bg-indigo-600/40 transition text-indigo-300">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                </button>
+            </header>
+            <div class="search-bar-wrap shrink-0">
+                <i data-lucide="search" class="search-icon w-3.5 h-3.5"></i>
+                <input type="text" id="search-all" placeholder="Search emails…" autocomplete="off" oninput="handleSearch(this,'all','email-list-all')">
+                <button class="search-filter-btn" title="Advanced search" onclick="focusSearch('search-all')"><i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <div class="relative flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="email-list-all">
+                <div class="p-8 text-center text-slate-500"><i data-lucide="mail" class="w-10 h-10 mx-auto mb-3 opacity-30"></i><p class="text-sm">Click Refresh to load emails</p></div>
+            </div>
+        </div>
+
+        <!-- VIEW: UNREAD -->
+        <div id="view-unread" class="view-panel">
+            <header class="flex justify-between items-center mb-3 shrink-0">
+                <div><h2 class="text-2xl font-bold text-white">Unread</h2><p class="text-xs text-slate-400 mt-0.5">Emails you haven't read yet</p></div>
+                <button onclick="loadEmails('unread')" class="flex items-center gap-2 bg-purple-600/20 border border-purple-500/30 px-4 py-2 rounded-xl text-xs font-medium hover:bg-purple-600/40 transition text-purple-300">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                </button>
+            </header>
+            <div class="search-bar-wrap shrink-0">
+                <i data-lucide="search" class="search-icon w-3.5 h-3.5"></i>
+                <input type="text" id="search-unread" placeholder="Search unread…" autocomplete="off" oninput="handleSearch(this,'unread','email-list-unread')">
+                <button class="search-filter-btn" title="Advanced search"><i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <div class="relative flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="email-list-unread">
+                <div class="p-8 text-center text-slate-500"><i data-lucide="circle-dot" class="w-10 h-10 mx-auto mb-3 opacity-30"></i><p class="text-sm">Click Refresh to load unread emails</p></div>
+            </div>
+        </div>
+
+        <!-- VIEW: IMPORTANT (AI Agent) -->
+        <div id="view-important" class="view-panel">
+            <header class="flex justify-between items-center mb-3 shrink-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-2xl font-bold text-white">Important</h2>
+                        <span class="text-[9px] bg-amber-600/30 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">AI Agent</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">AI reads every email and decides what truly matters — not just Gmail's label. Runs automatically in the background.</p>
+                </div>
+                <span id="important-auto-status" class="flex items-center gap-1.5 text-[10px] text-amber-400/70"></span>
+            </header>
+            <div class="search-bar-wrap shrink-0">
+                <i data-lucide="search" class="search-icon w-3.5 h-3.5"></i>
+                <input type="text" id="search-important" placeholder="Search important emails…" autocomplete="off" oninput="handleSearch(this,'important','email-list-important')">
+                <button class="search-filter-btn" title="Advanced search"><i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <div class="relative flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="email-list-important">
+                <div class="p-8 text-center text-slate-500">
+                    <i data-lucide="star" class="w-10 h-10 mx-auto mb-3 opacity-30"></i>
+                    <p class="text-sm font-medium">AI Important Analyser</p>
+                    <p class="text-xs mt-1 opacity-60">Analysing automatically in the background — results appear here shortly.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: SENT -->
+        <div id="view-sent" class="view-panel">
+            <header class="flex justify-between items-center mb-3 shrink-0">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">Sent</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Mail you've sent — pulled live from your Gmail Sent folder</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="document.getElementById('open-compose-btn').click()" class="flex items-center gap-2 bg-sky-600/20 border border-sky-500/30 px-4 py-2 rounded-xl text-xs font-medium hover:bg-sky-600/40 transition text-sky-300">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Compose
+                    </button>
+                    <button onclick="loadSentEmails()" class="flex items-center gap-2 bg-sky-600/20 border border-sky-500/30 px-4 py-2 rounded-xl text-xs font-medium hover:bg-sky-600/40 transition text-sky-300">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                    </button>
+                </div>
+            </header>
+            <div class="search-bar-wrap shrink-0">
+                <i data-lucide="search" class="search-icon w-3.5 h-3.5"></i>
+                <input type="text" id="search-sent" placeholder="Search sent mail…" autocomplete="off" oninput="handleSearch(this,'sent','email-list-sent')">
+                <button class="search-filter-btn" title="Advanced search" onclick="focusSearch('search-sent')"><i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <div class="relative flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="email-list-sent">
+                <div class="p-8 text-center text-slate-500"><i data-lucide="send" class="w-10 h-10 mx-auto mb-3 opacity-30"></i><p class="text-sm">Click Refresh to load sent mail</p></div>
+            </div>
+        </div>
+
+        <!-- VIEW: UPCOMING MEETINGS (AI Agent) -->
+        <div id="view-upcoming" class="view-panel">
+            <header class="flex justify-between items-center mb-4 shrink-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-2xl font-bold text-white">Meetings</h2>
+                        <span class="text-[9px] bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md font-bold">AI Agent</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">AI extracts meeting dates, times & links from your emails — not just keyword matching</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="open-create-meeting-btn" class="flex items-center gap-2 bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2 rounded-xl text-xs font-semibold hover:from-sky-500 hover:to-indigo-500 transition text-white shadow-[0_0_18px_rgba(56,189,248,0.25)]">
+                        <i data-lucide="video" class="w-3.5 h-3.5"></i> Create Meeting
+                    </button>
+                    <button onclick="loadMeetingsAI()" class="flex items-center gap-2 bg-emerald-600/20 border border-emerald-500/30 px-4 py-2 rounded-xl text-xs font-medium hover:bg-emerald-600/40 transition text-emerald-300">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Extract Meetings
+                    </button>
+                </div>
+            </header>
+            <div id="created-meetings-panel" class="hidden mb-3 shrink-0"></div>
+            <div class="flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="meetings-list-panel">
+                <div class="p-8 text-center text-slate-500">
+                    <i data-lucide="calendar-days" class="w-10 h-10 mx-auto mb-3 opacity-30"></i>
+                    <p class="text-sm font-medium">AI Meeting Extractor</p>
+                    <p class="text-xs mt-1 opacity-60">Click "Extract Meetings" — AI finds exact dates, times, and links from your emails</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: CATEGORIZE (AI Agent) — category + priority, one AI pass -->
+        <div id="view-categorize" class="view-panel">
+            <header class="flex justify-between items-center mb-4 shrink-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-2xl font-bold text-white">Categorize</h2>
+                        <span class="text-[9px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md font-bold">AI Agent</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">Like Gmail tabs — AI sorts every email into smart categories and ranks each by priority. Runs automatically in the background.</p>
+                </div>
+                <span id="categorize-auto-status" class="flex items-center gap-1.5 text-[10px] text-indigo-400/70"></span>
+            </header>
+            <!-- Category tabs -->
+            <div class="flex gap-2 mb-3 overflow-x-auto pb-1 shrink-0" id="cat-tabs-row">
+                <div class="p-8 text-center text-slate-500 w-full"><p class="text-xs">Analysing your inbox automatically — categories appear here shortly.</p></div>
+            </div>
+            <div class="flex items-center gap-4 mb-3 shrink-0" id="cat-priority-legend" style="display:none">
+                <div class="flex items-center gap-1.5 text-xs"><span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="text-slate-400">High priority</span></div>
+                <div class="flex items-center gap-1.5 text-xs"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-slate-400">Medium</span></div>
+                <div class="flex items-center gap-1.5 text-xs"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-slate-400">Low</span></div>
+                <span class="text-xs text-slate-600">· sorted highest priority first within each category</span>
+            </div>
+            <div class="flex-1 overflow-y-auto bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl" id="categorize-list">
+            </div>
+        </div>
+
+        <!-- VIEW: AI SUMMARIZE -->
+        <div id="view-summarize" class="view-panel">
+            <header class="flex justify-between items-center mb-4 shrink-0">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-2xl font-bold text-white">AI Summarize</h2>
+                        <span class="text-[9px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md font-bold">Streaming</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">Full inbox digest streamed live · Or click Summarize on any individual email</p>
+                </div>
+            </header>
+            <div class="flex-1 overflow-y-auto space-y-4">
+                <div class="bg-gradient-to-br from-indigo-950/60 to-purple-950/40 border border-indigo-500/20 rounded-2xl p-5">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center"><i data-lucide="brain-circuit" class="w-3.5 h-3.5 text-indigo-400"></i></div>
+                                <h3 class="font-bold text-white text-sm">Smart Daily Digest (Streamed)</h3>
+                            </div>
+                            <p class="text-xs text-slate-400 leading-relaxed">Reads your 30 most recent emails · Groq streams the response chunk by chunk · Structured sections with action checklist</p>
+                            <div class="flex items-center gap-3 mt-3">
+                                <button id="summarize-btn" onclick="runSummarizeStream()" class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition">
+                                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Generate Digest
+                                </button>
+                                <span class="text-xs text-slate-500">Streams as it generates</span>
+                            </div>
+                        </div>
+                        <div class="hidden md:flex flex-col gap-1.5 shrink-0">
+                            <div class="flex items-center gap-2 text-xs text-emerald-400"><i data-lucide="check-circle" class="w-3 h-3"></i> Categorized sections</div>
+                            <div class="flex items-center gap-2 text-xs text-blue-400"><i data-lucide="check-circle" class="w-3 h-3"></i> Live streaming output</div>
+                            <div class="flex items-center gap-2 text-xs text-purple-400"><i data-lucide="check-circle" class="w-3 h-3"></i> Action checklist</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="summarize-output" class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5 min-h-[280px]">
+                    <div class="flex flex-col items-center justify-center h-full py-10 text-slate-500">
+                        <i data-lucide="file-text" class="w-10 h-10 mb-3 opacity-20"></i>
+                        <p class="text-sm">Your AI digest will stream here</p>
+                        <p class="text-xs mt-1 opacity-60">Powered by Groq · Streamed in real-time</p>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-blue-950/40 to-indigo-950/30 border border-blue-500/20 rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/30 flex items-center justify-center"><i data-lucide="clock" class="w-3.5 h-3.5 text-blue-400"></i></div>
+                            <div>
+                                <h3 class="font-bold text-white text-sm">Auto Digest</h3>
+                                <p class="text-[10px] text-slate-500">Saved automatically every day at 7 PM · no button press needed</p>
+                            </div>
+                        </div>
+                        <button onclick="loadLatestAutoDigest()" class="flex items-center gap-1.5 text-[11px] bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/40 text-blue-300 px-2.5 py-1 rounded-lg transition">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="auto-digest-content" class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-4 text-sm text-slate-300 leading-relaxed stream-output min-h-[120px]">
+                        <div class="flex flex-col items-center justify-center py-8 text-slate-500">
+                            <i data-lucide="clock" class="w-8 h-8 mb-2 opacity-20"></i>
+                            <p class="text-xs">Loading today's auto digest…</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                            <i data-lucide="history" class="w-3.5 h-3.5 text-indigo-400"></i> Past Digests
+                        </h3>
+                        <span class="text-[10px] text-slate-500">History of the 7 PM auto digest</span>
+                    </div>
+                    <div id="digest-history-list" class="space-y-1.5"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: ANALYTICS -->
+        <div id="view-analytics" class="view-panel">
+            <header class="mb-4 shrink-0">
+                <h2 class="text-2xl font-bold text-white">Analytics</h2>
+                <p class="text-xs text-slate-400 mt-0.5">Inbox statistics at a glance</p>
+            </header>
+            <div class="grid grid-cols-3 gap-4 mb-4 shrink-0">
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5 text-center"><p class="text-xs text-slate-400 mb-1">Total Emails</p><h3 id="analytics-total" class="text-3xl font-black text-white">–</h3></div>
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5 text-center"><p class="text-xs text-slate-400 mb-1">Unread</p><h3 id="analytics-unread" class="text-3xl font-black text-purple-300">–</h3></div>
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5 text-center"><p class="text-xs text-slate-400 mb-1">Important</p><h3 id="analytics-important" class="text-3xl font-black text-amber-300">–</h3></div>
+            </div>
+            <div class="flex-1 bg-[#0d0c1d]/60 border border-[#1f1c38] rounded-2xl p-6 flex items-center justify-center">
+                <div class="text-center text-slate-500"><i data-lucide="bar-chart-3" class="w-12 h-12 mx-auto mb-4 opacity-20"></i><p class="text-sm">Detailed charts coming soon</p></div>
+            </div>
+        </div>
+
+        <!-- VIEW: SETTINGS -->
+        <div id="view-settings" class="view-panel">
+            <header class="mb-4 shrink-0"><h2 class="text-2xl font-bold text-white">Settings</h2></header>
+            <div class="flex-1 overflow-y-auto space-y-4">
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5">
+                    <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="user" class="w-4 h-4 text-indigo-400"></i> Account</h3>
+                    <div class="flex items-center justify-between p-3 bg-[#131126] border border-[#201d3a] rounded-xl">
+                        <div><p class="text-sm font-medium text-white">{{ user_name or 'User' }}</p><p class="text-xs text-slate-400">{{ user_email or '' }}</p></div>
+                        <a href="/logout" class="text-xs bg-rose-900/30 border border-rose-800/40 text-rose-400 px-3 py-1.5 rounded-lg hover:bg-rose-900/50 transition">Sign Out</a>
+                    </div>
+                </div>
+                <div class="bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-5">
+                    <h3 class="font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i> AI Model</h3>
+                    <div class="p-3 bg-[#131126] border border-[#201d3a] rounded-xl flex items-center gap-3">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+                        <p class="text-sm text-slate-300">Groq API · <span class="text-indigo-300 font-mono text-xs">openai/gpt-oss-120b</span></p>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2 px-1">All AI agents (Important, Meetings, Categorize — which also ranks priority) use Groq for real understanding — not keyword matching.</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ═══════════════ RIGHT SIDEBAR: CALENDAR ═══════════════ -->
+    <aside class="w-72 bg-[#0d0c1d]/80 border border-[#1f1c38] rounded-2xl p-4 flex flex-col backdrop-blur-xl shrink-0 overflow-y-auto">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-1.5">
+                <button id="prev-month-btn" class="p-1.5 hover:bg-[#1a1733] rounded-lg text-slate-400 hover:text-white transition"><i data-lucide="chevron-left" class="w-3.5 h-3.5"></i></button>
+                <h3 id="calendar-header-title" class="text-xs font-bold text-white tracking-wide min-w-[80px] text-center"></h3>
+                <button id="next-month-btn" class="p-1.5 hover:bg-[#1a1733] rounded-lg text-slate-400 hover:text-white transition"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <button id="reset-today-btn" class="text-[10px] px-2.5 py-1.5 bg-[#16142a] border border-[#262247] rounded-lg hover:text-white transition font-medium">Today</button>
+        </div>
+        <div class="grid grid-cols-7 text-center text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+            <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+        </div>
+        <div id="calendar-days-grid" class="grid grid-cols-7 text-center text-xs gap-y-1.5 font-medium text-slate-300"></div>
+
+        <!-- Meeting calendar legend -->
+        <div class="mt-2 flex flex-col gap-1 text-[10px] text-slate-500 px-1">
+            <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span><span>Green dot = meeting on that date</span></div>
+            <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span><span>Amber dot = note/reminder on that date</span></div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-[#1f1c38]">
+            <h4 class="text-[10px] font-bold text-slate-400 tracking-wide mb-2 uppercase" id="notes-section-label">Notes &amp; Reminders</h4>
+            <div id="notes-list" class="space-y-1.5 max-h-32 overflow-y-auto pr-1 mb-2">
+                <p class="text-[11px] text-slate-500">Click a date on the calendar to add a note or reminder.</p>
+            </div>
+            <div id="notes-add-wrap" class="hidden flex items-center gap-1.5">
+                <input id="note-input" type="text" placeholder="Add a note or reminder…" autocomplete="off"
+                    class="flex-1 bg-[#121024] border border-[#232042] rounded-lg text-[11px] px-2 py-1.5 text-slate-300 outline-none focus:border-indigo-500 transition">
+                <button id="note-add-btn" class="shrink-0 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-lg p-1.5 transition">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-[#1f1c38]">
+            <h4 class="text-[10px] font-bold text-slate-400 tracking-wide mb-2 uppercase">Upcoming Meetings (AI)</h4>
+            <div id="agenda-list" class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                <p class="text-[11px] text-slate-500">Run "Extract Meetings" to see AI-detected meetings here</p>
+            </div>
+        </div>
+
+        <div class="pt-4 border-t border-[#1f1c38] mt-4">
+            <h5 class="text-[10px] uppercase font-bold tracking-wider text-slate-500 mb-2">Go to date</h5>
+            <div class="grid grid-cols-3 gap-1.5 mb-2">
+                <select id="select-month" class="bg-[#121024] border border-[#232042] rounded-lg text-xs p-1.5 text-slate-300 focus:outline-none focus:border-indigo-500">
+                    <option value="0">Jan</option><option value="1">Feb</option><option value="2">Mar</option>
+                    <option value="3">Apr</option><option value="4">May</option><option value="5" selected>Jun</option>
+                    <option value="6">Jul</option><option value="7">Aug</option><option value="8">Sep</option>
+                    <option value="9">Oct</option><option value="10">Nov</option><option value="11">Dec</option>
+                </select>
+                <select id="select-day" class="bg-[#121024] border border-[#232042] rounded-lg text-xs p-1.5 text-slate-300 focus:outline-none focus:border-indigo-500"></select>
+                <select id="select-year" class="bg-[#121024] border border-[#232042] rounded-lg text-xs p-1.5 text-slate-300 focus:outline-none focus:border-indigo-500"></select>
+            </div>
+            <button id="jump-to-date-btn" class="w-full py-1.5 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2">
+                <i data-lucide="compass" class="w-3 h-3"></i> Go
+            </button>
+        </div>
+    </aside>
+
+    <!-- ═══════════════ EMAIL READER MODAL ═══════════════ -->
+    <div id="email-modal" class="modal-overlay" style="display:none">
+        <div class="modal-box">
+            <div class="flex items-center justify-between p-4 border-b border-[#1f1c38] shrink-0">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <i data-lucide="mail-open" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+                    <h3 id="email-modal-subject" class="text-sm font-bold text-white truncate"></h3>
+                </div>
+                <button id="email-modal-close" class="text-slate-500 hover:text-white p-1 ml-2 shrink-0"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 border-b border-[#1f1c38] shrink-0 space-y-1">
+                <div class="flex items-center gap-2"><span class="text-[10px] text-slate-500 w-10 shrink-0">From</span><span id="email-modal-from" class="text-xs text-slate-300"></span></div>
+                <div class="flex items-center gap-2"><span class="text-[10px] text-slate-500 w-10 shrink-0">To</span><span id="email-modal-to" class="text-xs text-slate-300"></span></div>
+                <div class="flex items-center gap-2"><span class="text-[10px] text-slate-500 w-10 shrink-0">Date</span><span id="email-modal-date" class="text-xs text-slate-300"></span></div>
+            </div>
+            <!-- AI Summarize button inside email modal -->
+            <div class="px-4 py-2.5 border-b border-[#1f1c38] shrink-0 flex items-center gap-3">
+                <button id="email-modal-summarize-btn" class="flex items-center gap-1.5 bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/40 text-indigo-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+                    <i data-lucide="sparkles" class="w-3 h-3"></i> Summarize this email
+                </button>
+                <span class="text-[10px] text-slate-600">AI reads and summarizes for you</span>
+            </div>
+            <!-- AI summary area -->
+            <div id="email-modal-summary" class="hidden px-4 py-3 border-b border-[#1f1c38] bg-indigo-950/20 shrink-0">
+                <div class="flex items-center gap-1.5 mb-2"><i data-lucide="sparkles" class="w-3 h-3 text-indigo-400"></i><span class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">AI Summary</span></div>
+                <div id="email-modal-summary-text" class="text-xs text-slate-300 leading-relaxed stream-output"></div>
+            </div>
+            <div id="email-modal-body" class="flex-1 overflow-y-auto p-4 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                <div class="flex items-center justify-center py-8"><div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ AI DIGEST MODAL (overview card) ═══════════════ -->
+    <div id="digest-modal" class="modal-overlay" style="display:none">
+        <div class="modal-box">
+            <div class="flex items-center justify-between p-4 border-b border-[#1f1c38] shrink-0">
+                <div class="flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i><h3 class="text-base font-bold text-white">AI Digest</h3></div>
+                <button id="digest-modal-close" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div id="digest-modal-body" class="flex-1 overflow-y-auto p-4 text-sm text-slate-300 leading-relaxed stream-output"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ COMPOSE MODAL — SEND A NEW EMAIL ═══════════════ -->
+    <div id="compose-modal" class="modal-overlay" style="display:none">
+        <div class="modal-box">
+            <div class="flex items-center justify-between p-4 border-b border-[#1f1c38] shrink-0">
+                <div class="flex items-center gap-2"><i data-lucide="pencil" class="w-4 h-4 text-sky-400"></i><h3 class="text-base font-bold text-white">New Message</h3></div>
+                <button id="compose-modal-close" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 space-y-3 overflow-y-auto">
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">To</label>
+                    <input type="text" id="compose-to" placeholder="recipient@example.com" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Cc <span class="opacity-60">(optional)</span></label>
+                    <input type="text" id="compose-cc" placeholder="cc@example.com" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Subject</label>
+                    <input type="text" id="compose-subject" placeholder="Subject" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Message</label>
+                    <textarea id="compose-body" placeholder="Write your message…" rows="10"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-sky-500 transition resize-vertical leading-relaxed font-[inherit]"></textarea>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 p-4 border-t border-[#1f1c38] shrink-0">
+                <button id="compose-send-btn" class="reply-btn-send" style="background:linear-gradient(135deg,#0284c7,#4f46e5)">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i> Send
+                </button>
+                <button class="reply-btn-cancel" onclick="closeComposeModal()">Discard</button>
+                <span id="compose-status" class="text-[11px] text-slate-500 ml-2"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ CREATE MEETING MODAL ═══════════════ -->
+    <div id="meeting-modal" class="modal-overlay" style="display:none">
+        <div class="modal-box" style="max-width:560px">
+            <div class="flex items-center justify-between p-4 border-b border-[#1f1c38] shrink-0">
+                <div class="flex items-center gap-2"><i data-lucide="video" class="w-4 h-4 text-sky-400"></i><h3 class="text-base font-bold text-white">Create Meeting</h3></div>
+                <button id="meeting-modal-close" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 space-y-3.5 overflow-y-auto">
+
+                <!-- Platform picker -->
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium mb-1.5 block">Platform</label>
+                    <div id="meeting-platform-grid" class="grid grid-cols-5 gap-1.5">
+                        <button data-platform="google_meet" class="meeting-platform-btn flex flex-col items-center gap-1 p-2 rounded-xl border text-[10px] font-medium transition">
+                            <i data-lucide="video" class="w-4 h-4"></i> Meet
+                        </button>
+                        <button data-platform="teams" class="meeting-platform-btn flex flex-col items-center gap-1 p-2 rounded-xl border text-[10px] font-medium transition">
+                            <i data-lucide="users" class="w-4 h-4"></i> Teams
+                        </button>
+                        <button data-platform="zoom" class="meeting-platform-btn flex flex-col items-center gap-1 p-2 rounded-xl border text-[10px] font-medium transition">
+                            <i data-lucide="camera" class="w-4 h-4"></i> Zoom
+                        </button>
+                        <button data-platform="skype" class="meeting-platform-btn flex flex-col items-center gap-1 p-2 rounded-xl border text-[10px] font-medium transition">
+                            <i data-lucide="phone" class="w-4 h-4"></i> Skype
+                        </button>
+                        <button data-platform="custom" class="meeting-platform-btn flex flex-col items-center gap-1 p-2 rounded-xl border text-[10px] font-medium transition">
+                            <i data-lucide="link" class="w-4 h-4"></i> Custom
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Google Meet auto-generate note -->
+                <div id="meeting-meet-note" class="text-[11px] text-sky-300 bg-sky-950/30 border border-sky-800/30 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 shrink-0"></i>
+                    <span>A Google Meet link is generated automatically when you create the meeting.</span>
+                </div>
+
+                <!-- Custom/Teams/Zoom/Skype link input -->
+                <div id="meeting-link-field" class="hidden">
+                    <label class="text-[10px] text-slate-500 font-medium">Meeting link</label>
+                    <input type="text" id="meeting-custom-link" placeholder="Paste your Zoom / Teams / Skype / custom link…" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                    <p class="text-[10px] text-slate-500 mt-1">Paste the link your platform already generated — MailMind just attaches it to the calendar invite and email.</p>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Title</label>
+                    <input type="text" id="meeting-title" placeholder="e.g. Project sync" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium mb-1.5 block">Date &amp; time</label>
+                    <div class="grid grid-cols-3 gap-1.5 mb-1.5">
+                        <select id="meeting-month" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition"></select>
+                        <select id="meeting-day" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition"></select>
+                        <select id="meeting-year" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition"></select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <select id="meeting-hour" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition"></select>
+                        <select id="meeting-minute" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition"></select>
+                        <select id="meeting-ampm" class="bg-[#06050f] border border-[#1f1c38] rounded-lg px-2 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                            <option value="AM">AM</option><option value="PM">PM</option>
+                        </select>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1">Pick any date directly — no scrolling needed.</p>
+                    <input type="hidden" id="meeting-datetime">
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Duration</label>
+                    <select id="meeting-duration"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                        <option value="15">15 min</option>
+                        <option value="30" selected>30 min</option>
+                        <option value="45">45 min</option>
+                        <option value="60">1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Attendee email(s) <span class="opacity-60">(comma-separated)</span></label>
+                    <input type="text" id="meeting-attendees" placeholder="someone@example.com, other@example.com" autocomplete="off"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition">
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-500 font-medium">Notes <span class="opacity-60">(optional)</span></label>
+                    <textarea id="meeting-description" placeholder="Agenda or notes…" rows="3"
+                        class="w-full mt-1 bg-[#06050f] border border-[#1f1c38] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500 transition resize-vertical leading-relaxed font-[inherit]"></textarea>
+                </div>
+
+                <label class="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer">
+                    <input type="checkbox" id="meeting-send-email" checked class="accent-sky-500 w-3.5 h-3.5">
+                    Email the invite to attendees too (via MailMind / Gmail)
+                </label>
+            </div>
+            <div class="flex items-center gap-2 p-4 border-t border-[#1f1c38] shrink-0">
+                <button id="meeting-create-btn" class="reply-btn-send" style="background:linear-gradient(135deg,#0284c7,#4f46e5)">
+                    <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Create &amp; Send
+                </button>
+                <button class="reply-btn-cancel" onclick="closeMeetingModal()">Cancel</button>
+                <span id="meeting-status" class="text-[11px] text-slate-500 ml-2"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    lucide.createIcons();
+
+    // ─────────────────────────────────────────────
+    // GLOBAL STATE (must be at top so all functions can access)
+    // ─────────────────────────────────────────────
+    // Per-panel email cache for instant Fuse.js search filtering.
+    // Populated by loadEmails() and loadImportantAI() on each fetch.
+    const emailCache = {};
+    const searchTimers = {};   // debounce timer handles, keyed by containerId
+    const searchInFlight = {}; // track in-flight server searches for shimmer
+    // Lookup map for email metadata (from/subject/date) used by reply handlers.
+    // Avoids embedding JSON.stringify() inside HTML onclick attributes, which
+    // breaks the HTML parser when strings contain double quotes.
+    const _emailMeta = {};
+
+    // ── Agent rate-limit cooldown ──────────────────────────────────────────
+    // Groq's free tier has a tight requests-per-minute limit. If the user
+    // clicks between AI agents quickly, we block new calls for AGENT_COOLDOWN_MS
+    // and show a friendly wait message instead of hitting the API.
+    const AGENT_COOLDOWN_MS = 15000;  // 15 seconds between agent calls
+    let _lastAgentCallAt = 0;
+
+    function agentCooldownRemaining() {
+        return Math.max(0, AGENT_COOLDOWN_MS - (Date.now() - _lastAgentCallAt));
+    }
+
+    function markAgentCall() {
+        _lastAgentCallAt = Date.now();
+    }
+
+    function agentCooldownHTML(retryFn) {
+        const secs = Math.ceil(agentCooldownRemaining() / 1000);
+        return `<div class="p-8 text-center">
+            <p class="text-amber-400 text-sm font-medium mb-2">⏳ Groq rate limit — please wait</p>
+            <p class="text-slate-400 text-xs mb-4">AI agents share a request quota. Wait <span id="cooldown-counter">${secs}</span>s before running another agent.</p>
+            <button onclick="${retryFn}()" class="text-xs bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 px-4 py-2 rounded-xl hover:bg-indigo-600/40 transition">Retry</button>
+        </div>`;
+    }
+
+    function startCooldownCounter() {
+        const el = document.getElementById('cooldown-counter');
+        if (!el) return;
+        const iv = setInterval(() => {
+            const rem = Math.ceil(agentCooldownRemaining() / 1000);
+            if (!el.isConnected) { clearInterval(iv); return; }
+            el.textContent = rem;
+            if (rem <= 0) clearInterval(iv);
+        }, 1000);
+    }
+
+    // ── Automatic background AI pipeline ────────────────────────────────────
+    // Replaces the old "Run AI Agent" / "Categorize Now" buttons. Instead of
+    // waiting for a click, Important + Categorize are triggered automatically
+    // whenever the dashboard loads and whenever the inbox actually changes
+    // (detected via a lightweight /api/stats poll — a practical stand-in for
+    // a real Gmail push webhook, which would need server-side watch()/Pub-Sub
+    // wiring). Calls are serialized through the existing cooldown so this
+    // doesn't burn through Groq's rate limit any faster than manual clicking did.
+    let _autoAgentQueue = [];
+    let _autoAgentQueueRunning = false;
+
+    function queueAutoAgent(fn) {
+        if (_autoAgentQueue.includes(fn)) return; // already queued
+        _autoAgentQueue.push(fn);
+        processAutoAgentQueue();
+    }
+
+    function processAutoAgentQueue() {
+        if (_autoAgentQueueRunning || _autoAgentQueue.length === 0) return;
+        _autoAgentQueueRunning = true;
+        const runNext = () => {
+            const fn = _autoAgentQueue.shift();
+            if (!fn) { _autoAgentQueueRunning = false; return; }
+            setTimeout(async () => {
+                try { await fn(); } catch (_) { /* individual agent already shows its own error state */ }
+                runNext();
+            }, agentCooldownRemaining());
+        };
+        runNext();
+    }
+
+    // Tracks the last inbox "shape" we auto-processed, so a 60s poll doesn't
+    // needlessly re-run the pipeline (and re-spend Groq quota) when nothing
+    // in the inbox has actually changed.
+    let _autoPipelineSignature = null;
+
+    async function checkInboxAndAutoProcess(forceRerun = false) {
+        try {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            if (data.error) return;
+
+            setText('stat-total', data.total);
+            setText('stat-unread', data.unread);
+            setText('stat-important', data.important);
+            setText('stat-sent', data.sent);
+            setText('nav-badge-total', data.total);
+            setText('nav-badge-unread', data.unread);
+            setText('nav-badge-sent', data.sent);
+
+            const signature = `${data.total}:${data.unread}:${data.important}`;
+            if (!forceRerun && signature === _autoPipelineSignature) return; // inbox unchanged, nothing to do
+            _autoPipelineSignature = signature;
+
+            queueAutoAgent(loadImportantAI);
+            queueAutoAgent(loadCategorize);
+        } catch (_) { /* stats poll failing shouldn't disrupt the rest of the UI */ }
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
+    // ─────────────────────────────────────────────
+    // VIEW NAVIGATION
+    // ─────────────────────────────────────────────
+    const navItems   = document.querySelectorAll('.nav-item[data-view]');
+    const viewPanels = document.querySelectorAll('.view-panel');
+
+    function navigateTo(target) {
+        navItems.forEach(n => n.classList.remove('active'));
+        const navMatch = document.querySelector(`.nav-item[data-view="${target}"]`);
+        if (navMatch) navMatch.classList.add('active');
+        viewPanels.forEach(p => p.classList.remove('active'));
+        const panel = document.getElementById('view-' + target);
+        if (panel) panel.classList.add('active');
+        if (target === 'all-emails')  loadEmails('all');
+        if (target === 'unread')      loadEmails('unread');
+        if (target === 'sent')        loadSentEmails();
+        if (target === 'analytics')   loadAnalytics();
+        if (target === 'assistant')   setTimeout(() => document.getElementById('chat-input')?.focus(), 50);
+        if (target === 'summarize')   { loadLatestAutoDigest(); loadDigestHistory(); }
+    }
+
+    navItems.forEach(item => {
+        item.addEventListener('click', () => navigateTo(item.dataset.view));
+    });
+
+    document.querySelectorAll('.deck-card[data-view]').forEach(card => {
+        card.addEventListener('click', () => navigateTo(card.dataset.view));
+    });
+
+    // ─────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────
+    function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+    // Small status pill next to a view's header, used by the auto-triggered
+    // agents (Important, Categorize) to show background-processing state
+    // without a manual "run" button.
+    function setAutoStatus(elId, state) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        if (state === 'running') {
+            el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span> AI processing…`;
+        } else if (state === 'done') {
+            el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Up to date`;
+            setTimeout(() => { if (el.innerHTML.includes('Up to date')) el.innerHTML = ''; }, 4000);
+        } else {
+            el.innerHTML = '';
+        }
+    }
+    function loadingHTML(msg) { return `<div class="p-8 text-center"><div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full spinner mx-auto mb-3"></div><p class="text-sm text-slate-400">${msg}</p></div>`; }
+    function errorHTML(msg, retryFn) {
+        const retryBtn = retryFn
+            ? `<button onclick="${retryFn}()" class="mt-3 text-[11px] bg-rose-900/20 border border-rose-700/30 text-rose-300 px-3 py-1.5 rounded-lg hover:bg-rose-900/40 transition font-medium">Retry</button>`
+            : '';
+        return `<div class="p-8 text-center text-rose-400 text-sm"><p>${escapeHtml(msg)}</p>${retryBtn}</div>`;
+    }
+
+    // Escape untrusted text (email subject/snippet/sender come straight from
+    // Gmail and can contain HTML — never inject them unescaped into innerHTML).
+    function escapeHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    // Simple markdown-ish renderer for AI output
+    function renderMarkdown(text) {
+        return text
+            .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+            .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^[-•] (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/^(?!<[hul])/gm, '')
+            .replace(/\n/g, ' ');
+    }
+
+    // ─────────────────────────────────────────────
+    // AI ASSISTANT — agentic chat (LangChain agent via /api/agent/chat)
+    // ─────────────────────────────────────────────
+    (function initChat() {
+        const form     = document.getElementById('chat-form');
+        const input    = document.getElementById('chat-input');
+        const sendBtn  = document.getElementById('chat-send-btn');
+        const messages = document.getElementById('chat-messages');
+        if (!form) return;
+
+        function clearEmptyState() {
+            const empty = messages.querySelector('.flex-col.items-center.justify-center');
+            if (empty) empty.remove();
+        }
+
+        function addBubble(role, text) {
+            clearEmptyState();
+            const isUser = role === 'user';
+            const wrap = document.createElement('div');
+            wrap.className = `flex items-start gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`;
+            wrap.innerHTML = `
+                <div class="w-7 h-7 rounded-lg ${isUser ? 'bg-indigo-600/30 border-indigo-500/30' : 'bg-emerald-600/20 border-emerald-500/30'} border flex items-center justify-center shrink-0">
+                    <i data-lucide="${isUser ? 'user' : 'bot'}" class="w-3.5 h-3.5 ${isUser ? 'text-indigo-300' : 'text-emerald-400'}"></i>
+                </div>
+                <div class="max-w-[75%] ${isUser ? 'bg-indigo-600/15 border-indigo-500/20' : 'bg-[#16142a] border-[#211e3b]'} border rounded-2xl px-4 py-2.5 text-sm text-slate-200 leading-relaxed whitespace-pre-wrap"></div>
+            `;
+            wrap.querySelector('div.max-w-\\[75\\%\\]').textContent = text;
+            messages.appendChild(wrap);
+            if (window.lucide) lucide.createIcons();
+            messages.scrollTop = messages.scrollHeight;
+            return wrap;
+        }
+
+        function addTypingBubble() {
+            clearEmptyState();
+            const wrap = document.createElement('div');
+            wrap.className = 'flex items-start gap-2.5';
+            wrap.id = 'chat-typing';
+            wrap.innerHTML = `
+                <div class="w-7 h-7 rounded-lg bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                    <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
+                </div>
+                <div class="bg-[#16142a] border border-[#211e3b] rounded-2xl px-4 py-3 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+                    <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+                    <span class="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+                </div>
+            `;
+            messages.appendChild(wrap);
+            if (window.lucide) lucide.createIcons();
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // A tool-level failure (status: "error" from the backend) gets its
+        // own visually-distinct bubble instead of being folded into the
+        // model's own prose — makes it obvious this is a real failure, not
+        // just the agent being terse.
+        function addErrorBubble(message) {
+            clearEmptyState();
+            const wrap = document.createElement('div');
+            wrap.className = 'flex items-start gap-2.5';
+            wrap.innerHTML = `
+                <div class="w-7 h-7 rounded-lg bg-rose-600/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-400"></i>
+                </div>
+                <div class="max-w-[75%] bg-rose-950/30 border border-rose-800/30 rounded-2xl px-4 py-2.5 text-sm text-rose-300 leading-relaxed whitespace-pre-wrap"></div>
+            `;
+            wrap.querySelector('div.max-w-\\[75\\%\\]').textContent = message;
+            messages.appendChild(wrap);
+            if (window.lucide) lucide.createIcons();
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Renders the actual "where do I confirm" UI: a card describing
+        // what the agent drafted (a reply body, or an archive query+count)
+        // with real Confirm / Cancel buttons wired to
+        // /api/agent/confirm/<action_id>. This is the missing piece that
+        // made pending_action responses previously have nowhere to go.
+        function addPendingActionCard(pendingAction) {
+            clearEmptyState();
+            const actionId = pendingAction.action_id;
+            const type = pendingAction.action_type;
+
+            let bodyHTML = '';
+            if (type === 'reply') {
+                bodyHTML = `
+                    <div class="space-y-1 text-[11px] text-slate-400 mb-3">
+                        <div><span class="text-slate-500 font-medium">To:</span> ${escapeHtml(pendingAction.to || '')}</div>
+                        <div><span class="text-slate-500 font-medium">Subject:</span> ${escapeHtml(pendingAction.subject || '')}</div>
+                    </div>
+                    <div class="text-xs text-slate-300 bg-[#0a0919] border border-[#211e3b] rounded-lg p-2.5 mb-3 whitespace-pre-wrap leading-relaxed">${escapeHtml(pendingAction.body_preview || '')}</div>`;
+            } else if (type === 'archive') {
+                bodyHTML = `
+                    <div class="text-xs text-slate-300 mb-3">
+                        This will archive <span class="font-bold text-amber-300">${pendingAction.count ?? '?'}</span> email(s) matching:
+                        <code class="block mt-1 text-[11px] bg-[#0a0919] border border-[#211e3b] rounded-lg px-2 py-1.5 text-emerald-300">${escapeHtml(pendingAction.query || '')}</code>
+                    </div>`;
+            } else {
+                bodyHTML = `<div class="text-xs text-slate-400 mb-3">${escapeHtml(pendingAction.message || 'An action is waiting for your confirmation.')}</div>`;
+            }
+
+            const wrap = document.createElement('div');
+            wrap.className = 'flex items-start gap-2.5';
+            wrap.innerHTML = `
+                <div class="w-7 h-7 rounded-lg bg-amber-600/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                    <i data-lucide="shield-question" class="w-3.5 h-3.5 text-amber-400"></i>
+                </div>
+                <div class="max-w-[75%] bg-[#16142a] border border-amber-500/25 rounded-2xl px-4 py-3">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
+                        <i data-lucide="alert-circle" class="w-3 h-3"></i> Confirmation needed
+                    </p>
+                    ${bodyHTML}
+                    <div class="flex items-center gap-2">
+                        <button class="pending-confirm-btn reply-btn-send" data-action-id="${actionId}">
+                            <i data-lucide="check" class="w-3 h-3"></i> Confirm
+                        </button>
+                        <button class="pending-cancel-btn reply-btn-cancel" data-action-id="${actionId}">Cancel</button>
+                        <span class="pending-status text-[11px] text-slate-500 ml-1"></span>
+                    </div>
+                </div>
+            `;
+            messages.appendChild(wrap);
+            if (window.lucide) lucide.createIcons();
+            messages.scrollTop = messages.scrollHeight;
+
+            const card = wrap.querySelector('div.max-w-\\[75\\%\\]');
+            const confirmBtn = wrap.querySelector('.pending-confirm-btn');
+            const cancelBtn  = wrap.querySelector('.pending-cancel-btn');
+            const statusEl   = wrap.querySelector('.pending-status');
+
+            confirmBtn.addEventListener('click', async () => {
+                confirmBtn.disabled = true;
+                cancelBtn.disabled = true;
+                statusEl.textContent = 'Sending…';
+                try {
+                    const res = await fetch(`/api/agent/confirm/${actionId}`, { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok || data.error) {
+                        statusEl.textContent = '';
+                        statusEl.className = 'pending-status text-[11px] text-rose-400 ml-1';
+                        statusEl.textContent = '✗ ' + (data.error || 'Failed to confirm.');
+                        confirmBtn.disabled = false;
+                        cancelBtn.disabled = false;
+                        return;
+                    }
+                    statusEl.className = 'pending-status text-[11px] text-emerald-400 ml-1';
+                    statusEl.textContent = '✓ Done';
+                    confirmBtn.remove();
+                    cancelBtn.remove();
+                } catch (err) {
+                    statusEl.className = 'pending-status text-[11px] text-rose-400 ml-1';
+                    statusEl.textContent = '✗ Network error';
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                }
+            });
+
+            cancelBtn.addEventListener('click', async () => {
+                confirmBtn.disabled = true;
+                cancelBtn.disabled = true;
+                statusEl.textContent = 'Cancelling…';
+                try {
+                    await fetch(`/api/agent/confirm/${actionId}`, { method: 'DELETE' });
+                } catch (_) { /* best effort */ }
+                statusEl.className = 'pending-status text-[11px] text-slate-500 ml-1';
+                statusEl.textContent = 'Cancelled';
+                confirmBtn.remove();
+                cancelBtn.remove();
+            });
+        }
+
+        async function sendMessage(prompt) {
+            prompt = prompt.trim();
+            if (!prompt) return;
+
+            addBubble('user', prompt);
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+            addTypingBubble();
+
+            try {
+                const res = await fetch('/api/agent/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await res.json();
+                document.getElementById('chat-typing')?.remove();
+
+                if (!res.ok) {
+                    addBubble('agent', data.error || 'Something went wrong — please try again.');
+                } else {
+                    // Always show the model's own narration first…
+                    addBubble('agent', data.response || 'No response from the agent.');
+
+                    // …then layer on whatever structured signal the backend
+                    // pulled out of the tool call, since the model's prose
+                    // can't be trusted to carry these accurately by itself.
+                    if (data.tool_error) {
+                        addErrorBubble('⚠ ' + data.tool_error);
+                    } else if (data.pending_action) {
+                        addPendingActionCard(data.pending_action);
+                    } else if (data.needs_reauth && data.reauth_url) {
+                        const confirmed = confirm(
+                            'This action needs an additional Google permission.\n\n' +
+                            'Click OK to re-authenticate — you\'ll be taken to Google to approve it, then brought back to MailMind.'
+                        );
+                        if (confirmed) window.location.href = data.reauth_url;
+                    }
+                }
+            } catch (err) {
+                document.getElementById('chat-typing')?.remove();
+                addBubble('agent', 'Network error reaching the agent — please try again.');
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendMessage(input.value);
+        });
+
+        document.querySelectorAll('.chat-suggestion').forEach(btn => {
+            btn.addEventListener('click', () => sendMessage(btn.textContent));
+        });
+    })();
+
+    // ─────────────────────────────────────────────
+    // EMAIL ROW HTML (with Read + Summarize + Reply buttons)
+    // ─────────────────────────────────────────────
+    function emailRowHTML(e, extraBadge = '') {
+        const fromShort = escapeHtml((e.from || '').replace(/<.*>/, '').trim() || 'Unknown');
+        const subject   = escapeHtml(e.subject || '(no subject)');
+        const snippet   = escapeHtml(e.snippet || '');
+        const date = (e.date || '').slice(5, 16);
+        const unreadDot = e.unread
+            ? '<span class="w-2 h-2 bg-indigo-400 rounded-full shrink-0 mt-1.5"></span>'
+            : '<span class="w-2 h-2 rounded-full shrink-0 mt-1.5"></span>';
+        const impBadge = e.important
+            ? '<span class="text-[9px] bg-amber-900/30 border border-amber-700/30 text-amber-400 px-1.5 py-0.5 rounded-md font-bold shrink-0">★</span>'
+            : '';
+        const eid = e.id;
+        // Store email metadata in a global map so onclick handlers can look it
+        // up by id — avoids embedding JSON.stringify() values inside HTML
+        // onclick attributes, which breaks the HTML parser when strings contain
+        // double quotes (common in email From headers like "Name <addr>").
+        _emailMeta[eid] = { from: e.from || '', subject: e.subject || '', date: e.date || '' };
+        return `
+        <div id="row-${eid}">
+            <div class="email-row flex items-start gap-3 px-4 py-3.5 border-b border-[#1a1830]" onclick="openEmail('${eid}')">
+                ${unreadDot}
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <span class="text-xs font-semibold text-slate-200 truncate">${fromShort}</span>
+                        <span class="text-[10px] text-slate-500 font-mono shrink-0">${date}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <p class="text-xs text-slate-300 font-medium truncate">${subject}</p>
+                        ${impBadge}
+                        ${extraBadge}
+                    </div>
+                    <p class="text-[11px] text-slate-500 truncate mt-0.5">${snippet}</p>
+                </div>
+                <div class="flex flex-col gap-1 shrink-0">
+                    <button onclick="event.stopPropagation(); openEmail('${eid}')" class="text-[10px] bg-[#1a1830] hover:bg-indigo-600/30 text-slate-400 hover:text-indigo-300 px-2 py-1 rounded-lg transition font-medium">Read</button>
+                    <button onclick="event.stopPropagation(); openEmailAndSummarize('${eid}')" class="text-[10px] bg-[#1a1830] hover:bg-purple-600/30 text-slate-400 hover:text-purple-300 px-2 py-1 rounded-lg transition font-medium">✦ Sum.</button>
+                    <button onclick="event.stopPropagation(); toggleReply('${eid}')" class="text-[10px] bg-[#1a1830] hover:bg-emerald-600/30 text-slate-400 hover:text-emerald-300 px-2 py-1 rounded-lg transition font-medium">↩ Reply</button>
+                </div>
+            </div>
+            <div id="reply-${eid}" class="reply-compose">
+                <p class="text-[10px] text-slate-500 font-medium">Reply to <span class="text-slate-300">${fromShort}</span></p>
+                <div class="quote-block" id="quote-${eid}"></div>
+                <textarea id="reply-body-${eid}" placeholder="Write your reply…"></textarea>
+                <div class="flex items-center gap-2">
+                    <button class="reply-btn-send" onclick="sendReply('${eid}')">
+                        <i data-lucide="send" class="w-3 h-3"></i> Send
+                    </button>
+                    <button class="reply-btn-cancel" onclick="closeReply('${eid}')">Cancel</button>
+                    <span id="reply-status-${eid}" class="text-[11px] text-slate-500 ml-2"></span>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ─────────────────────────────────────────────
+    // EMAIL MODAL — READ FULL EMAIL
+    // ─────────────────────────────────────────────
+    const emailModal = document.getElementById('email-modal');
+    document.getElementById('email-modal-close').onclick = () => { emailModal.style.display = 'none'; };
+    emailModal.addEventListener('click', e => { if (e.target === emailModal) emailModal.style.display = 'none'; });
+
+    async function openEmail(emailId) {
+        emailModal.style.display = 'flex';
+        document.getElementById('email-modal-subject').textContent = 'Loading…';
+        document.getElementById('email-modal-from').textContent = '';
+        document.getElementById('email-modal-to').textContent = '';
+        document.getElementById('email-modal-date').textContent = '';
+        document.getElementById('email-modal-body').innerHTML = loadingHTML('Fetching email…');
+        document.getElementById('email-modal-summary').classList.add('hidden');
+        document.getElementById('email-modal-summary-text').innerHTML = '';
+
+        // Store current email id for summarize btn
+        emailModal.dataset.emailId = emailId;
+
+        try {
+            const res = await fetch(`/api/emails/${emailId}/body`);
+            const data = await res.json();
+            if (data.error) { document.getElementById('email-modal-body').innerHTML = errorHTML(data.error); return; }
+
+            document.getElementById('email-modal-subject').textContent = data.subject || '(no subject)';
+            document.getElementById('email-modal-from').textContent    = data.from || '';
+            document.getElementById('email-modal-to').textContent      = data.to || '';
+            document.getElementById('email-modal-date').textContent    = data.date || '';
+            document.getElementById('email-modal-body').textContent    = data.body || data.snippet || '(no body content)';
+            lucide.createIcons();
+
+            // Gmail marks an email read as soon as you open it — keep the
+            // dashboard's unread counters and row dot in sync with that,
+            // instead of only updating Gmail server-side with no UI change.
+            if (data.was_unread) {
+                markEmailReadInUI(emailId);
+            }
+        } catch (err) {
+            document.getElementById('email-modal-body').innerHTML = errorHTML('Failed to load email: ' + err.message);
+        }
+    }
+
+    // Updates unread badges/stat and removes the unread dot for a row,
+    // without needing a full re-fetch of the email list.
+    function markEmailReadInUI(emailId) {
+        const decBadge = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const current = parseInt(el.textContent, 10);
+            if (!isNaN(current) && current > 0) el.textContent = current - 1;
+        };
+        decBadge('nav-badge-unread');
+        decBadge('stat-unread');
+
+        // Find the row's onclick="openEmail('<id>')" and clear its unread dot.
+        document.querySelectorAll(`[onclick*="openEmail('${emailId}')"]`).forEach(btn => {
+            const row = btn.closest('.email-row');
+            if (!row) return;
+            const dot = row.querySelector('span.bg-indigo-400.rounded-full');
+            if (dot) dot.classList.remove('bg-indigo-400');
+        });
+    }
+
+    async function openEmailAndSummarize(emailId) {
+        await openEmail(emailId);
+        // Small delay to let body load
+        setTimeout(() => summarizeOpenEmail(), 300);
+    }
+
+    // Summarize the currently open email
+    document.getElementById('email-modal-summarize-btn').addEventListener('click', summarizeOpenEmail);
+
+    async function summarizeOpenEmail() {
+        const emailId = emailModal.dataset.emailId;
+        if (!emailId) return;
+
+        const summaryDiv  = document.getElementById('email-modal-summary');
+        const summaryText = document.getElementById('email-modal-summary-text');
+        summaryDiv.classList.remove('hidden');
+        summaryText.innerHTML = '<span class="text-slate-500 text-xs">Generating summary…</span><span class="cursor"></span>';
+
+        // Get the current email body text already loaded
+        const bodyEl = document.getElementById('email-modal-body');
+        const bodyContent = bodyEl.textContent || '';
+        const subj = document.getElementById('email-modal-subject').textContent;
+        const from = document.getElementById('email-modal-from').textContent;
+        const emailText = `Subject: ${subj}\nFrom: ${from}\nBody:\n${bodyContent.slice(0, 3000)}`;
+
+        await streamSummarize(emailText, null, summaryText, emailId);
+    }
+
+    // ─────────────────────────────────────────────
+    // LOAD EMAILS (all / unread)
+    // ─────────────────────────────────────────────
+    async function loadEmails(filter) {
+        const containerId = filter === 'all' ? 'email-list-all' : 'email-list-unread';
+        const el = document.getElementById(containerId);
+        el.innerHTML = loadingHTML('Loading emails…');
+        // Clear the search input so stale query doesn't re-filter on next keystroke
+        const searchId = filter === 'all' ? 'search-all' : 'search-unread';
+        const searchEl = document.getElementById(searchId);
+        if (searchEl) searchEl.value = '';
+
+        try {
+            const res = await fetch('/api/emails/recent?max=30');
+            const data = await res.json();
+            if (data.error) { el.innerHTML = errorHTML('Not authenticated. Please log in.'); return; }
+            let emails = data.emails || [];
+            if (filter === 'unread') emails = emails.filter(e => e.unread);
+            emailCache[containerId] = emails;   // store for Fuse.js client-side search
+            if (emails.length === 0) { el.innerHTML = `<div class="p-8 text-center text-slate-500 text-sm">No ${filter} emails found.</div>`; return; }
+            el.innerHTML = emails.map(e => emailRowHTML(e)).join('');
+            lucide.createIcons();
+        } catch (err) {
+            el.innerHTML = errorHTML('Failed: ' + err.message);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // SENT MAIL — pulled live from the real Gmail SENT label
+    // ─────────────────────────────────────────────
+    async function loadSentEmails() {
+        const containerId = 'email-list-sent';
+        const el = document.getElementById(containerId);
+        el.innerHTML = loadingHTML('Loading sent mail…');
+        const searchEl = document.getElementById('search-sent');
+        if (searchEl) searchEl.value = '';
+
+        try {
+            const res = await fetch('/api/emails/sent?max=30');
+            const data = await res.json();
+            if (data.error) { el.innerHTML = errorHTML('Not authenticated. Please log in.', 'loadSentEmails'); return; }
+            const emails = data.emails || [];
+            emailCache[containerId] = emails;
+            setText('nav-badge-sent', emails.length);
+            if (emails.length === 0) { el.innerHTML = `<div class="p-8 text-center text-slate-500 text-sm">No sent mail yet — hit Compose to send your first email.</div>`; return; }
+            // Sent rows show the recipient ("to") rather than the sender, and
+            // skip the Reply button since replying to yourself doesn't make sense.
+            el.innerHTML = emails.map(e => sentRowHTML(e)).join('');
+            lucide.createIcons();
+        } catch (err) {
+            el.innerHTML = errorHTML('Failed: ' + err.message, 'loadSentEmails');
+        }
+    }
+
+    // Sent-mail row: same visual language as emailRowHTML, but shows "To"
+    // instead of "From" and has Read + Summarize only (no Reply).
+    function sentRowHTML(e) {
+        const toShort  = escapeHtml((e.to || '').replace(/<.*>/, '').trim() || 'Unknown recipient');
+        const subject  = escapeHtml(e.subject || '(no subject)');
+        const snippet  = escapeHtml(e.snippet || '');
+        const date = (e.date || '').slice(5, 16);
+        const eid = e.id;
+        _emailMeta[eid] = { from: e.from || '', subject: e.subject || '', date: e.date || '' };
+        return `
+        <div id="row-${eid}">
+            <div class="email-row flex items-start gap-3 px-4 py-3.5 border-b border-[#1a1830]" onclick="openEmail('${eid}')">
+                <span class="w-2 h-2 rounded-full shrink-0 mt-1.5 bg-sky-500/60"></span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <span class="text-xs font-semibold text-slate-200 truncate">To: ${toShort}</span>
+                        <span class="text-[10px] text-slate-500 font-mono shrink-0">${date}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <p class="text-xs text-slate-300 font-medium truncate">${subject}</p>
+                        <span class="text-[9px] bg-sky-900/30 border border-sky-700/30 text-sky-400 px-1.5 py-0.5 rounded-md font-bold shrink-0">SENT</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 truncate mt-0.5">${snippet}</p>
+                </div>
+                <div class="flex flex-col gap-1 shrink-0">
+                    <button onclick="event.stopPropagation(); openEmail('${eid}')" class="text-[10px] bg-[#1a1830] hover:bg-sky-600/30 text-slate-400 hover:text-sky-300 px-2 py-1 rounded-lg transition font-medium">Read</button>
+                    <button onclick="event.stopPropagation(); openEmailAndSummarize('${eid}')" class="text-[10px] bg-[#1a1830] hover:bg-purple-600/30 text-slate-400 hover:text-purple-300 px-2 py-1 rounded-lg transition font-medium">✦ Sum.</button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ─────────────────────────────────────────────
+    // IMPORTANT — AI AGENT
+    // ─────────────────────────────────────────────
+    async function loadImportantAI() {
+        const el = document.getElementById('email-list-important');
+        if (agentCooldownRemaining() > 0) {
+            el.innerHTML = agentCooldownHTML('loadImportantAI');
+            startCooldownCounter(); return;
+        }
+        el.innerHTML = loadingHTML('AI Agent analysing your emails for importance… (this takes ~10s)');
+        setAutoStatus('important-auto-status', 'running');
+        markAgentCall();
+        try {
+            const res = await fetch('/api/agent/important');
+            const data = await res.json();
+            if (data.error) { el.innerHTML = errorHTML('Error: ' + data.error, 'loadImportantAI'); return; }
+            const emails = data.emails || [];
+            setText('nav-badge-important', emails.length);
+
+            if (emails.length === 0) {
+                el.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">AI found no critically important emails right now. 🎉</div>';
+                return;
+            }
+            el.innerHTML = emails.map(e => {
+                const score = e.importance_score || 0;
+                const scoreColor = score >= 9 ? 'text-rose-400' : score >= 7 ? 'text-amber-400' : 'text-emerald-400';
+                const extraBadge = `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-900/30 border border-amber-700/30 ${scoreColor} shrink-0">${score}/10</span>`;
+                return `
+                <div class="border-b border-[#1a1830] last:border-0">
+                    ${emailRowHTML(e, extraBadge)}
+                    <div class="flex items-start gap-2 px-9 pb-3 -mt-1">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[11px] text-amber-400/80"><span class="font-semibold">Why:</span> ${escapeHtml(e.importance_reason || '')}</p>
+                            ${e.action_needed && e.action_needed !== 'No action needed' ? `<p class="text-[11px] text-indigo-400/80 mt-0.5"><span class="font-semibold">Action:</span> ${escapeHtml(e.action_needed)}</p>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        } catch (err) {
+            el.innerHTML = errorHTML('Failed: ' + err.message, 'loadImportantAI');
+        } finally {
+            setAutoStatus('important-auto-status', 'done');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // MEETINGS — AI AGENT + CALENDAR DOTS
+    // ─────────────────────────────────────────────
+    let meetingDates = new Set(); // stores YYYY-MM-DD strings for calendar dots
+
+    async function loadMeetingsAI() {
+        const el = document.getElementById('meetings-list-panel');
+        if (agentCooldownRemaining() > 0) {
+            el.innerHTML = agentCooldownHTML('loadMeetingsAI');
+            startCooldownCounter(); return;
+        }
+        el.innerHTML = loadingHTML('AI Agent extracting meetings, dates & links… (~15s)');
+        markAgentCall();
+        try {
+            const res = await fetch('/api/agent/meetings');
+            const data = await res.json();
+            if (data.error) { el.innerHTML = errorHTML('Error: ' + data.error, 'loadMeetingsAI'); return; }
+            const meetings = data.meetings || [];
+            setText('stat-meetings', meetings.length);
+            setText('nav-badge-meetings', meetings.length);
+
+            // Collect meeting dates for calendar
+            meetingDates = new Set();
+            meetings.forEach(m => { if (m.meeting_date) meetingDates.add(m.meeting_date); });
+            renderCalendar(currentDate); // re-render calendar with dots
+
+            // Update sidebar agenda
+            const agendaList = document.getElementById('agenda-list');
+            if (meetings.length === 0) {
+                agendaList.innerHTML = '<p class="text-[11px] text-slate-500">No meetings found in the last 30 days.</p>';
+            } else {
+                const dotColors = ['bg-emerald-500','bg-blue-500','bg-amber-500','bg-purple-500','bg-rose-500'];
+                agendaList.innerHTML = meetings.map((m, i) => `
+                    <div class="p-2 bg-[#131126] border border-[#201d3a] rounded-xl">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full ${dotColors[i % dotColors.length]} shrink-0"></span>
+                            <span class="text-[11px] font-semibold text-slate-200 truncate">${escapeHtml(m.subject || '')}</span>
+                        </div>
+                        ${m.meeting_date ? `<p class="text-[10px] text-emerald-400 font-mono ml-3">${escapeHtml(m.meeting_date)}${m.meeting_time ? ' · ' + escapeHtml(m.meeting_time) : ''}</p>` : ''}
+                        ${m.meeting_type ? `<p class="text-[10px] text-slate-500 ml-3">${escapeHtml(m.meeting_type.replace('_', ' '))}</p>` : ''}
+                    </div>`).join('');
+            }
+
+            if (meetings.length === 0) {
+                el.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">No meetings found in recent emails.</div>';
+                return;
+            }
+
+            const typeColors = {
+                interview: 'text-rose-400 bg-rose-900/20 border-rose-800/30',
+                zoom_call: 'text-blue-400 bg-blue-900/20 border-blue-800/30',
+                standup: 'text-emerald-400 bg-emerald-900/20 border-emerald-800/30',
+                webinar: 'text-purple-400 bg-purple-900/20 border-purple-800/30',
+                client_call: 'text-amber-400 bg-amber-900/20 border-amber-800/30',
+                team_meeting: 'text-indigo-400 bg-indigo-900/20 border-indigo-800/30',
+                other: 'text-slate-400 bg-slate-900/20 border-slate-800/30',
+            };
+
+            el.innerHTML = meetings.map(m => {
+                const tc = typeColors[m.meeting_type] || typeColors.other;
+                const typeLabel = escapeHtml((m.meeting_type || 'meeting').replace('_', ' '));
+                const subject = escapeHtml(m.subject || '(no subject)');
+                const from = escapeHtml(m.from || '');
+                const description = escapeHtml(m.description || '');
+                const meetingDateStr = m.meeting_date ? escapeHtml(m.meeting_date) : '';
+                const meetingTimeStr = m.meeting_time ? escapeHtml(m.meeting_time) : '';
+                const meetingDayStr = m.meeting_day ? escapeHtml(m.meeting_day) : '';
+                // meeting_link is rendered as an href — escape it too so a
+                // malicious value can't break out of the attribute.
+                const meetingLink = m.meeting_link ? escapeHtml(m.meeting_link) : '';
+                return `
+                <div class="email-row flex items-start gap-3 px-5 py-4 border-b border-[#1a1830] last:border-0" onclick="openEmail('${m.id}')">
+                    <div class="w-8 h-8 rounded-xl bg-emerald-900/20 border border-emerald-800/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2 mb-1">
+                            <p class="text-xs font-semibold text-slate-200 truncate flex-1">${subject}</p>
+                            <span class="text-[9px] font-bold px-2 py-0.5 rounded-md border ${tc} shrink-0">${typeLabel}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 truncate mb-1.5">from ${from}</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${meetingDateStr ? `<span class="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded-md border border-emerald-800/20"><i data-lucide="calendar" class="w-2.5 h-2.5"></i>${meetingDateStr}${meetingTimeStr ? ' · ' + meetingTimeStr : ''}</span>` : '<span class="text-[10px] text-slate-600">Date not found in email</span>'}
+                            ${meetingDayStr ? `<span class="text-[10px] text-slate-500">${meetingDayStr}</span>` : ''}
+                            ${meetingLink ? `<a href="${meetingLink}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="flex items-center gap-1 text-[10px] text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded-md border border-blue-800/20 hover:bg-blue-900/40 transition"><i data-lucide="link" class="w-2.5 h-2.5"></i>Join</a>` : ''}
+                        </div>
+                        <p class="text-[11px] text-indigo-400/80 mt-1.5">${description}</p>
+                    </div>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        } catch (err) {
+            el.innerHTML = errorHTML('Failed: ' + err.message, 'loadMeetingsAI');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // CATEGORIZE — AI AGENT
+    // ─────────────────────────────────────────────
+    let catData = {};
+    let activeCat = '';
+
+    async function loadCategorize() {
+        const listEl = document.getElementById('categorize-list');
+        const tabsEl = document.getElementById('cat-tabs-row');
+        const legendEl = document.getElementById('cat-priority-legend');
+        if (agentCooldownRemaining() > 0) {
+            listEl.innerHTML = agentCooldownHTML('loadCategorize');
+            startCooldownCounter(); return;
+        }
+        listEl.innerHTML = loadingHTML('AI Agent categorising & priority-ranking your emails… (~15s)');
+        tabsEl.innerHTML = '';
+        legendEl.style.display = 'none';
+        setAutoStatus('categorize-auto-status', 'running');
+        markAgentCall();
+
+        try {
+            const res = await fetch('/api/agent/categorize');
+            const data = await res.json();
+            if (data.error) { listEl.innerHTML = errorHTML('Error: ' + data.error, 'loadCategorize'); return; }
+            catData = data.categories || {};
+
+            const catConfig = {
+                Primary:    { icon: '📬', color: 'text-indigo-400' },
+                Social:     { icon: '👥', color: 'text-blue-400' },
+                Promotions: { icon: '🏷️', color: 'text-rose-400' },
+                Updates:    { icon: '🔔', color: 'text-amber-400' },
+                Finance:    { icon: '💳', color: 'text-emerald-400' },
+                Jobs:       { icon: '💼', color: 'text-purple-400' },
+                Security:   { icon: '🔒', color: 'text-red-400' },
+                Newsletters:{ icon: '📰', color: 'text-cyan-400' },
+            };
+
+            // Build tabs
+            const cats = Object.keys(catData).sort((a, b) => (catData[b].length - catData[a].length));
+            if (cats.length === 0) { listEl.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">No emails found to categorize.</div>'; return; }
+
+            tabsEl.innerHTML = cats.map((cat, i) => {
+                const cfg = catConfig[cat] || { icon: '📧', color: 'text-slate-400' };
+                const highCount = (catData[cat] || []).filter(e => (e.priority || '').toUpperCase() === 'HIGH').length;
+                const highDot = highCount > 0 ? `<span class="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block ml-1"></span>` : '';
+                return `<button class="cat-tab ${i === 0 ? 'active' : ''}" onclick="showCategory('${cat}', this)">
+                    ${cfg.icon} ${cat} <span class="opacity-60">(${catData[cat].length})</span>${highDot}
+                </button>`;
+            }).join('');
+
+            legendEl.style.display = 'flex';
+            activeCat = cats[0];
+            renderCategoryEmails(cats[0]);
+        } catch (err) {
+            listEl.innerHTML = errorHTML('Failed: ' + err.message, 'loadCategorize');
+        } finally {
+            setAutoStatus('categorize-auto-status', 'done');
+        }
+    }
+
+    function showCategory(cat, tabEl) {
+        document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+        tabEl.classList.add('active');
+        activeCat = cat;
+        renderCategoryEmails(cat);
+    }
+
+    function renderCategoryEmails(cat) {
+        const listEl = document.getElementById('categorize-list');
+        // Already sorted highest-priority-first by the backend, but sort
+        // defensively in case this ever gets fed stale/unsorted data.
+        const emails = (catData[cat] || []).slice().sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
+        if (emails.length === 0) { listEl.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">No emails in this category.</div>'; return; }
+        listEl.innerHTML = emails.map(e => {
+            const pri = (e.priority || 'LOW').toUpperCase();
+            const badgeClass = pri === 'HIGH' ? 'badge-high' : pri === 'MEDIUM' ? 'badge-med' : 'badge-low';
+            const priBadge = `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${badgeClass}" title="${escapeHtml(e.priority_reason || '')}">${pri} · ${e.priority_score ?? '–'}/10</span>`;
+            const reasonBadge = e.category_reason
+                ? `<span class="text-[9px] text-slate-500 bg-[#1a1830] px-1.5 py-0.5 rounded-md shrink-0">${escapeHtml(e.category_reason)}</span>`
+                : '';
+            return emailRowHTML(e, priBadge + reasonBadge);
+        }).join('');
+        lucide.createIcons();
+    }
+
+    // ─────────────────────────────────────────────
+    // AI SUMMARIZE — STREAMING SSE
+    // ─────────────────────────────────────────────
+    async function streamSummarize(emailsText, emailId, outputEl, singleEmailId = null) {
+        outputEl.innerHTML = '';
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        outputEl.appendChild(cursor);
+
+        try {
+            const body = emailId
+                ? { emails_text: emailsText, email_id: emailId }
+                : singleEmailId
+                    ? { emails_text: emailsText, email_id: singleEmailId }
+                    : { emails_text: emailsText };
+
+            const res = await fetch('/api/summarize/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            if (!res.ok) { outputEl.innerHTML = errorHTML('Streaming error'); return; }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let accumulated = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // keep incomplete line
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const chunk = line.slice(6);
+                        if (chunk === '[DONE]') { cursor.remove(); return; }
+                        if (chunk.startsWith('ERROR:')) {
+                            outputEl.innerHTML = errorHTML(chunk.slice(6));
+                            return;
+                        }
+                        // Unescape newlines
+                        const text = chunk.replace(/\\n/g, '\n');
+                        accumulated += text;
+
+                        // Re-render as markdown
+                        outputEl.innerHTML = renderMarkdown(accumulated);
+                        outputEl.appendChild(cursor);
+                    }
+                }
+            }
+            cursor.remove();
+        } catch (err) {
+            outputEl.innerHTML = errorHTML('Stream error: ' + err.message);
+        }
+    }
+
+    async function runSummarizeStream() {
+        const btn = document.getElementById('summarize-btn');
+        const out = document.getElementById('summarize-output');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full spinner"></div> Fetching…';
+        out.innerHTML = loadingHTML('Fetching your emails…');
+
+        try {
+            const res = await fetch('/api/emails/recent?max=30');
+            const data = await res.json();
+            if (data.error) { out.innerHTML = errorHTML('Not authenticated.'); return; }
+            const emails = data.emails || [];
+            if (emails.length === 0) { out.innerHTML = '<div class="p-6 text-slate-400 text-sm">No emails found.</div>'; return; }
+
+            const emailsText = emails.map(e => `From: ${e.from}\nSubject: ${e.subject}\nSnippet: ${e.snippet}`).join('\n\n---\n\n');
+            btn.innerHTML = '<div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full spinner"></div> Streaming…';
+
+            out.innerHTML = `
+                <div class="flex items-center gap-2 mb-4 pb-3 border-b border-[#1f1c38]">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+                    <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest">AI Digest · ${new Date().toLocaleTimeString()}</span>
+                </div>
+                <div id="stream-content" class="text-sm text-slate-300 leading-relaxed stream-output"></div>`;
+            lucide.createIcons();
+
+            const streamContent = document.getElementById('stream-content');
+            await streamSummarize(emailsText, null, streamContent);
+        } catch (err) {
+            out.innerHTML = errorHTML('Error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Generate Digest';
+            lucide.createIcons();
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // STATS + AUTO AI PIPELINE
+    // ─────────────────────────────────────────────
+    // Initial load: fetch stats, populate counters, and kick off the
+    // Important + Categorize agents automatically (forced, since there's no
+    // prior signature yet) — no button press required.
+    checkInboxAndAutoProcess(true);
+    // Re-check every 60s; only re-runs the agents if the inbox actually
+    // changed since the last pass (see checkInboxAndAutoProcess).
+    setInterval(() => checkInboxAndAutoProcess(false), 60000);
+// Load last night's stored digest (if any) into the overview card + digest modal
+async function loadStoredDigest() {
+    try {
+        const res = await fetch('/api/digest/latest');
+        const data = await res.json();
+        if (data.error || !data.digest) return;
+        const digest = data.digest; // { digest_text, email_count, created_at }
+        const card = document.getElementById('digest-card');
+        const cardTitle = card.querySelector('h3');
+        const when = new Date(digest.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        cardTitle.textContent = 'View digest →';
+        const label = card.querySelector('p.text-xs.text-blue-400');
+        if (label) label.textContent = `AI Digest · ${when}`;
+        // Stash it so opening the modal shows the stored 7 PM digest instantly
+        // instead of re-generating (user can still hit Regenerate inside the modal).
+        window._storedDigest = digest;
+    } catch (_) {}
+}
+loadStoredDigest();
+
+// Renders the most recent scheduler-saved digest directly inline in the
+// "Auto Digest" card on the AI Summarize tab (separate from the history
+// list below it, and separate from the live-streamed Generate Digest box).
+async function loadLatestAutoDigest() {
+    const el = document.getElementById('auto-digest-content');
+    if (!el) return;
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-8 text-slate-500"><div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full spinner mb-2"></div><p class="text-xs">Loading today's auto digest…</p></div>`;
+    try {
+        const res = await fetch('/api/digest/latest');
+        const data = await res.json();
+        if (data.error) { el.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">Not authenticated.</div>`; return; }
+        if (!data.digest) {
+            el.innerHTML = `<div class="flex flex-col items-center justify-center py-8 text-slate-500"><i data-lucide="clock" class="w-8 h-8 mb-2 opacity-20"></i><p class="text-xs">No auto digest saved yet — the 7 PM job hasn't run for your account.</p></div>`;
+            lucide.createIcons();
+            return;
+        }
+        const digest = data.digest;
+        const when = new Date(digest.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        el.innerHTML = `
+            <div class="flex items-center gap-2 mb-3 pb-2 border-b border-[#1f1c38] text-[10px] text-slate-500">
+                <i data-lucide="check-circle" class="w-3 h-3 text-blue-400"></i> Saved ${escapeHtml(when)} · ${digest.email_count ?? '–'} emails
+            </div>
+            ${renderMarkdown(digest.digest_text)}`;
+        lucide.createIcons();
+        window._storedDigest = digest; // keep overview card in sync too
+    } catch (err) {
+        el.innerHTML = `<div class="p-4 text-center text-rose-400 text-xs">Failed to load: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// Populate the "Past Digests" list in the AI Summarize tab from
+// /api/digest/history — the scheduler's saved digests, separate from the
+// live-streamed Generate Digest button above it.
+async function loadDigestHistory() {
+    const listEl = document.getElementById('digest-history-list');
+    if (!listEl) return;
+    listEl.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">Loading past digests…</div>`;
+    try {
+        const res = await fetch('/api/digest/history?limit=14');
+        const data = await res.json();
+        if (data.error) { listEl.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">Not authenticated.</div>`; return; }
+        const digests = data.digests || [];
+        if (digests.length === 0) {
+            listEl.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">No saved digests yet — the 7 PM job hasn't run for your account.</div>`;
+            return;
+        }
+        listEl.innerHTML = digests.map(d => {
+            const when = new Date(d.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+            return `
+                <button class="w-full text-left flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[#16142a] hover:bg-[#1f1c38] border border-[#211e3b] transition" onclick="viewStoredDigestById(${d.id})">
+                    <span class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="file-text" class="w-3.5 h-3.5 text-indigo-400"></i>${escapeHtml(when)}</span>
+                    <span class="text-[10px] text-slate-500">${d.email_count ?? '–'} emails</span>
+                </button>`;
+        }).join('');
+        lucide.createIcons();
+        window._digestHistory = digests;
+    } catch (err) {
+        listEl.innerHTML = `<div class="p-4 text-center text-rose-400 text-xs">Failed to load: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// Opens a past digest (from the history list) in the same modal used for the
+// overview card's stored/live digest.
+function viewStoredDigestById(id) {
+    const d = (window._digestHistory || []).find(x => x.id === id);
+    if (!d) return;
+    showStoredDigestInModal(d);
+}
+    function loadAnalytics() {
+        fetch('/api/stats').then(r => r.json()).then(data => {
+            if (!data.error) {
+                setText('analytics-total', data.total);
+                setText('analytics-unread', data.unread);
+                setText('analytics-important', data.important);
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────
+    // DIGEST MODAL (overview card click)
+    // ─────────────────────────────────────────────
+    const digestModal = document.getElementById('digest-modal');
+    const digestBody  = document.getElementById('digest-modal-body');
+    document.getElementById('digest-modal-close').onclick = () => { digestModal.style.display = 'none'; };
+    digestModal.addEventListener('click', e => { if (e.target === digestModal) digestModal.style.display = 'none'; });
+
+    async function generateDigestModal() {
+        digestModal.style.display = 'flex';
+        digestBody.innerHTML = loadingHTML('Fetching emails…');
+        try {
+            const res = await fetch('/api/emails/recent?max=30');
+            const data = await res.json();
+            if (data.error) { digestBody.innerHTML = errorHTML('Not authenticated.'); return; }
+            const emails = data.emails || [];
+            if (emails.length === 0) { digestBody.innerHTML = '<p class="text-slate-400 text-sm">No emails found.</p>'; return; }
+            const emailsText = emails.map(e => `From: ${e.from}\nSubject: ${e.subject}\nSnippet: ${e.snippet}`).join('\n\n---\n\n');
+            digestBody.innerHTML = `
+                <div class="flex items-center gap-2 mb-4 pb-3 border-b border-[#1f1c38]">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+                    <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest">AI Digest · Live</span>
+                </div>
+                <div id="modal-stream-content" class="text-sm text-slate-300 leading-relaxed stream-output"></div>`;
+            lucide.createIcons();
+            const streamContent = document.getElementById('modal-stream-content');
+            await streamSummarize(emailsText, null, streamContent);
+        } catch (err) {
+            digestBody.innerHTML = errorHTML('Error: ' + err.message);
+        }
+    }
+
+    // Renders an already-saved digest (from the 7 PM scheduler, either the
+    // latest one or one picked from the "Past Digests" history list) into
+    // the same modal, with a button to fall back to a fresh live-streamed
+    // one if the user wants up-to-the-minute results instead.
+    function showStoredDigestInModal(digest) {
+        digestModal.style.display = 'flex';
+        const when = new Date(digest.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        digestBody.innerHTML = `
+            <div class="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-[#1f1c38]">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="clock" class="w-4 h-4 text-blue-400"></i>
+                    <span class="text-xs font-bold text-blue-300 uppercase tracking-widest">Saved Digest · ${escapeHtml(when)}</span>
+                    <span class="text-[10px] text-slate-500">${digest.email_count ?? '–'} emails</span>
+                </div>
+                <button id="digest-modal-regenerate" class="flex items-center gap-1.5 text-[11px] bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/40 text-indigo-300 px-2.5 py-1 rounded-lg transition">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Regenerate live
+                </button>
+            </div>
+            <div class="text-sm text-slate-300 leading-relaxed stream-output">${renderMarkdown(digest.digest_text)}</div>`;
+        lucide.createIcons();
+        document.getElementById('digest-modal-regenerate').addEventListener('click', generateDigestModal);
+    }
+
+    // Overview card + sidebar button: if a scheduler-saved digest already
+    // exists, show that instantly (fast, no LLM call); otherwise fall back
+    // to generating one live, same as before.
+    function openDigestCard() {
+        if (window._storedDigest) {
+            showStoredDigestInModal(window._storedDigest);
+        } else {
+            generateDigestModal();
+        }
+    }
+
+    document.getElementById('digest-card').addEventListener('click', openDigestCard);
+    document.getElementById('generate-digest-btn').addEventListener('click', generateDigestModal);
+
+    // ─────────────────────────────────────────────
+    // COMPOSE MODAL — SEND A NEW EMAIL
+    // ─────────────────────────────────────────────
+    const composeModal = document.getElementById('compose-modal');
+    document.getElementById('compose-modal-close').onclick = closeComposeModal;
+    composeModal.addEventListener('click', e => { if (e.target === composeModal) closeComposeModal(); });
+
+    function openComposeModal(prefill = {}) {
+        document.getElementById('compose-to').value      = prefill.to || '';
+        document.getElementById('compose-cc').value      = prefill.cc || '';
+        document.getElementById('compose-subject').value = prefill.subject || '';
+        document.getElementById('compose-body').value    = prefill.body || '';
+        document.getElementById('compose-status').textContent = '';
+        const btn = document.getElementById('compose-send-btn');
+        btn.disabled = false;
+        composeModal.style.display = 'flex';
+        lucide.createIcons();
+        setTimeout(() => document.getElementById('compose-to').focus(), 50);
+    }
+
+    function closeComposeModal() {
+        composeModal.style.display = 'none';
+    }
+
+    document.getElementById('open-compose-btn').addEventListener('click', () => openComposeModal());
+
+    async function sendComposedEmail() {
+        const to      = document.getElementById('compose-to').value.trim();
+        const cc      = document.getElementById('compose-cc').value.trim();
+        const subject = document.getElementById('compose-subject').value.trim();
+        const body    = document.getElementById('compose-body').value.trim();
+        const status  = document.getElementById('compose-status');
+        const btn     = document.getElementById('compose-send-btn');
+
+        if (!to || !subject || !body) {
+            status.textContent = 'Please fill in To, Subject, and Message.';
+            return;
+        }
+
+        btn.disabled = true;
+        status.textContent = 'Sending…';
+
+        try {
+            const res = await fetch('/api/compose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to, cc, subject, body }),
+            });
+            const data = await res.json();
+
+            if (data.needs_reauth) {
+                const confirmed = confirm(
+                    'Sending emails requires an additional Google permission (gmail.send).\n\n' +
+                    'Click OK to re-authenticate — you\'ll be taken to Google to approve the new scope, then brought back to MailMind. ' +
+                    'Your draft won\'t be saved, so copy your message first if you want to keep it.'
+                );
+                if (confirmed) window.location.href = '/login/with-send';
+                status.textContent = '';
+                btn.disabled = false;
+                return;
+            }
+
+            if (data.error) {
+                status.textContent = '✗ ' + data.error;
+                btn.disabled = false;
+                return;
+            }
+
+            status.textContent = '✓ Sent!';
+            setTimeout(() => {
+                closeComposeModal();
+                // Refresh sent list + counters so the new mail shows immediately
+                if (document.getElementById('view-sent').classList.contains('active')) {
+                    loadSentEmails();
+                }
+                fetch('/api/stats').then(r => r.json()).then(d => {
+                    if (!d.error) { setText('stat-sent', d.sent); setText('nav-badge-sent', d.sent); }
+                }).catch(() => {});
+            }, 900);
+        } catch (err) {
+            status.textContent = '✗ Network error';
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('compose-send-btn').addEventListener('click', sendComposedEmail);
+
+    // ─────────────────────────────────────────────
+    // CALENDAR ENGINE
+    // ─────────────────────────────────────────────
+    const today = new Date();
+    let currentDate = new Date();
+    const grid     = document.getElementById('calendar-days-grid');
+    const calTitle = document.getElementById('calendar-header-title');
+    const yearSel  = document.getElementById('select-year');
+    const monthSel = document.getElementById('select-month');
+    const daySel   = document.getElementById('select-day');
+
+    // ───────── Personal Notes / Reminders (persisted in localStorage) ─────────
+    const NOTES_KEY = 'mailmind_notes_v1';
+    function loadAllNotes() {
+        try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '{}'); } catch { return {}; }
+    }
+    function saveAllNotes(obj) { localStorage.setItem(NOTES_KEY, JSON.stringify(obj)); }
+    let notesData = loadAllNotes();
+    let selectedDateStr = null; // currently selected calendar date, e.g. "2026-09-30"
+
+    function dateStrFor(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
+
+    function renderNotesPanel() {
+        const label   = document.getElementById('notes-section-label');
+        const list    = document.getElementById('notes-list');
+        const addWrap = document.getElementById('notes-add-wrap');
+        if (!selectedDateStr) {
+            label.textContent = 'Notes & Reminders';
+            list.innerHTML = '<p class="text-[11px] text-slate-500">Click a date on the calendar to add a note or reminder.</p>';
+            addWrap.style.display = 'none';
+            return;
+        }
+        const [yy, mm, dd] = selectedDateStr.split('-').map(Number);
+        const niceDate = new Date(yy, mm - 1, dd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        label.textContent = `Notes — ${niceDate}`;
+        addWrap.style.display = 'flex';
+        const notes = notesData[selectedDateStr] || [];
+        if (notes.length === 0) {
+            list.innerHTML = '<p class="text-[11px] text-slate-500">No notes yet for this date.</p>';
+        } else {
+            list.innerHTML = notes.map((n, i) => `
+                <div class="flex items-start gap-1.5 bg-[#121024] border border-[#201d3a] rounded-lg px-2 py-1.5">
+                    <span class="flex-1 text-[11px] text-slate-300 break-words">${escapeHtml(n)}</span>
+                    <button onclick="deleteNote('${selectedDateStr}', ${i})" class="text-slate-600 hover:text-rose-400 shrink-0"><i data-lucide="x" class="w-3 h-3"></i></button>
+                </div>`).join('');
+            lucide.createIcons();
+        }
+    }
+
+    function selectDate(y, m, d) {
+        const ds = dateStrFor(y, m, d);
+        selectedDateStr = (selectedDateStr === ds) ? null : ds; // click same date again to deselect
+        renderCalendar(currentDate);
+        renderNotesPanel();
+    }
+    window.selectDate = selectDate;
+
+    function addNoteForSelectedDate() {
+        if (!selectedDateStr) return;
+        const input = document.getElementById('note-input');
+        const text = input.value.trim();
+        if (!text) return;
+        if (!notesData[selectedDateStr]) notesData[selectedDateStr] = [];
+        notesData[selectedDateStr].push(text);
+        saveAllNotes(notesData);
+        input.value = '';
+        renderNotesPanel();
+        renderCalendar(currentDate);
+    }
+
+    function deleteNote(dateStr, idx) {
+        if (!notesData[dateStr]) return;
+        notesData[dateStr].splice(idx, 1);
+        if (notesData[dateStr].length === 0) delete notesData[dateStr];
+        saveAllNotes(notesData);
+        renderNotesPanel();
+        renderCalendar(currentDate);
+    }
+    window.deleteNote = deleteNote;
+
+    document.getElementById('note-add-btn').addEventListener('click', addNoteForSelectedDate);
+    document.getElementById('note-input').addEventListener('keydown', e => { if (e.key === 'Enter') addNoteForSelectedDate(); });
+
+    for (let y = new Date().getFullYear(); y >= 1999; y--) {
+        const o = document.createElement('option'); o.value = y; o.textContent = y; yearSel.appendChild(o);
+    }
+    function fillDays(days) {
+        daySel.innerHTML = '';
+        for (let d = 1; d <= days; d++) { const o = document.createElement('option'); o.value = d; o.textContent = d; daySel.appendChild(o); }
+    }
+    function renderCalendar(date) {
+        const y = date.getFullYear(), m = date.getMonth();
+        calTitle.textContent = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        grid.innerHTML = '';
+        const first = new Date(y, m, 1).getDay();
+        const total = new Date(y, m + 1, 0).getDate();
+        fillDays(total);
+        for (let i = 0; i < first; i++) { const b = document.createElement('div'); grid.appendChild(b); }
+        for (let d = 1; d <= total; d++) {
+            const el = document.createElement('div');
+            el.className = 'calendar-day text-xs';
+            const isToday = (d === today.getDate() && m === today.getMonth() && y === today.getFullYear());
+            if (isToday) el.classList.add('calendar-today');
+            // Check if any meeting on this date
+            const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            if (meetingDates.has(dateStr)) el.classList.add('calendar-has-meeting');
+            if (notesData[dateStr] && notesData[dateStr].length) el.classList.add('calendar-has-note');
+            if (selectedDateStr === dateStr) el.classList.add('calendar-selected');
+            el.textContent = d;
+            el.addEventListener('click', () => selectDate(y, m, d));
+            grid.appendChild(el);
+        }
+        monthSel.value = m; yearSel.value = y;
+    }
+    renderCalendar(currentDate);
+    document.getElementById('prev-month-btn').onclick = () => { currentDate.setMonth(currentDate.getMonth() - 1); renderCalendar(currentDate); };
+    document.getElementById('next-month-btn').onclick = () => { currentDate.setMonth(currentDate.getMonth() + 1); renderCalendar(currentDate); };
+    document.getElementById('reset-today-btn').onclick = () => { currentDate = new Date(); renderCalendar(currentDate); };
+    document.getElementById('jump-to-date-btn').onclick = () => { currentDate = new Date(+yearSel.value, +monthSel.value, +daySel.value || 1); renderCalendar(currentDate); };
+
+    // ─────────────────────────────────────────────
+    // CREATE MEETING — platform picker + Calendar API + invite email
+    // ─────────────────────────────────────────────
+    const meetingModal = document.getElementById('meeting-modal');
+    let selectedPlatform = 'google_meet';
+    // Locally tracked "created" meetings so the Meetings view shows them
+    // immediately, even before the next "Extract Meetings" AI run. Separate
+    // from meetingDates (calendar dots), which we also update.
+    const createdMeetings = [];
+
+    // ───────── Custom date/time dropdowns (replaces native datetime-local,
+    // which is a clunky scroll-wheel widget on most browsers/mobile and made
+    // it hard to jump to far-future dates like Sept 30 or Nov 24). ─────────
+    const meetingMonthSel  = document.getElementById('meeting-month');
+    const meetingDaySel    = document.getElementById('meeting-day');
+    const meetingYearSel   = document.getElementById('meeting-year');
+    const meetingHourSel   = document.getElementById('meeting-hour');
+    const meetingMinuteSel = document.getElementById('meeting-minute');
+    const meetingAmpmSel   = document.getElementById('meeting-ampm');
+
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    MONTH_NAMES.forEach((name, i) => {
+        const o = document.createElement('option'); o.value = i; o.textContent = name; meetingMonthSel.appendChild(o);
+    });
+    const meetingCurYear = new Date().getFullYear();
+    for (let y = meetingCurYear; y <= meetingCurYear + 5; y++) {
+        const o = document.createElement('option'); o.value = y; o.textContent = y; meetingYearSel.appendChild(o);
+    }
+    for (let h = 1; h <= 12; h++) { const o = document.createElement('option'); o.value = h; o.textContent = h; meetingHourSel.appendChild(o); }
+    for (let mi = 0; mi < 60; mi += 5) { const o = document.createElement('option'); o.value = mi; o.textContent = String(mi).padStart(2, '0'); meetingMinuteSel.appendChild(o); }
+
+    function fillMeetingDays() {
+        const month = +meetingMonthSel.value, year = +meetingYearSel.value;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const prevVal = +meetingDaySel.value || 1;
+        meetingDaySel.innerHTML = '';
+        for (let d = 1; d <= daysInMonth; d++) { const o = document.createElement('option'); o.value = d; o.textContent = d; meetingDaySel.appendChild(o); }
+        meetingDaySel.value = Math.min(prevVal, daysInMonth);
+    }
+
+    function syncMeetingDatetime() {
+        const year   = +meetingYearSel.value;
+        const month  = +meetingMonthSel.value;
+        const day    = +meetingDaySel.value;
+        const minute = +meetingMinuteSel.value;
+        let hour     = +meetingHourSel.value;
+        if (meetingAmpmSel.value === 'PM' && hour !== 12) hour += 12;
+        if (meetingAmpmSel.value === 'AM' && hour === 12) hour = 0;
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('meeting-datetime').value = `${year}-${pad(month + 1)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+    }
+
+    meetingMonthSel.addEventListener('change', () => { fillMeetingDays(); syncMeetingDatetime(); });
+    meetingYearSel.addEventListener('change', () => { fillMeetingDays(); syncMeetingDatetime(); });
+    [meetingDaySel, meetingHourSel, meetingMinuteSel, meetingAmpmSel].forEach(sel => sel.addEventListener('change', syncMeetingDatetime));
+
+    function openMeetingModal() {
+        // Sensible default: now, rounded up to the next 5 minutes
+        const d = new Date();
+        d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+
+        meetingYearSel.value  = d.getFullYear();
+        meetingMonthSel.value = d.getMonth();
+        fillMeetingDays();
+        meetingDaySel.value   = d.getDate();
+        let h12 = d.getHours() % 12; if (h12 === 0) h12 = 12;
+        meetingHourSel.value   = h12;
+        meetingMinuteSel.value = d.getMinutes() % 60;
+        meetingAmpmSel.value   = d.getHours() >= 12 ? 'PM' : 'AM';
+        syncMeetingDatetime();
+
+        document.getElementById('meeting-title').value = '';
+        document.getElementById('meeting-duration').value = '30';
+        document.getElementById('meeting-attendees').value = '';
+        document.getElementById('meeting-description').value = '';
+        document.getElementById('meeting-custom-link').value = '';
+        document.getElementById('meeting-send-email').checked = true;
+        document.getElementById('meeting-status').textContent = '';
+        document.getElementById('meeting-create-btn').disabled = false;
+        selectPlatform('google_meet');
+
+        meetingModal.style.display = 'flex';
+        lucide.createIcons();
+        setTimeout(() => document.getElementById('meeting-title').focus(), 50);
+    }
+
+    function closeMeetingModal() {
+        meetingModal.style.display = 'none';
+    }
+
+    document.getElementById('meeting-modal-close').onclick = closeMeetingModal;
+    meetingModal.addEventListener('click', e => { if (e.target === meetingModal) closeMeetingModal(); });
+    document.getElementById('open-create-meeting-btn').addEventListener('click', openMeetingModal);
+
+    function selectPlatform(platform) {
+        selectedPlatform = platform;
+        document.querySelectorAll('.meeting-platform-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.platform === platform);
+        });
+        const isMeet = platform === 'google_meet';
+        document.getElementById('meeting-meet-note').classList.toggle('hidden', !isMeet);
+        document.getElementById('meeting-link-field').classList.toggle('hidden', isMeet);
+    }
+
+    document.querySelectorAll('.meeting-platform-btn').forEach(btn => {
+        btn.addEventListener('click', () => selectPlatform(btn.dataset.platform));
+    });
+
+    async function createMeeting() {
+        const title       = document.getElementById('meeting-title').value.trim() || 'Meeting';
+        const datetimeVal = document.getElementById('meeting-datetime').value;
+        const duration    = document.getElementById('meeting-duration').value;
+        const attendees   = document.getElementById('meeting-attendees').value.trim();
+        const description = document.getElementById('meeting-description').value.trim();
+        const customLink  = document.getElementById('meeting-custom-link').value.trim();
+        const sendEmail   = document.getElementById('meeting-send-email').checked;
+        const status      = document.getElementById('meeting-status');
+        const btn         = document.getElementById('meeting-create-btn');
+
+        if (!datetimeVal) { status.textContent = 'Please pick a date & time.'; return; }
+        if (selectedPlatform !== 'google_meet' && !customLink) {
+            status.textContent = 'Please paste a meeting link for this platform.';
+            return;
+        }
+
+        btn.disabled = true;
+        status.textContent = 'Creating…';
+
+        // Detect the user's IANA timezone so Google Calendar shows the right
+        // local time regardless of where the server/browser sit.
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+        try {
+            const res = await fetch('/api/create-meeting', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    platform: selectedPlatform,
+                    custom_link: customLink,
+                    title,
+                    description,
+                    start: datetimeVal,
+                    duration_minutes: parseInt(duration, 10),
+                    attendees,
+                    send_invite_email: sendEmail,
+                    timezone,
+                }),
+            });
+            const data = await res.json();
+
+            if (data.needs_reauth) {
+                const confirmed = confirm(
+                    'Creating meetings requires an additional Google permission (Calendar access).\n\n' +
+                    'Click OK to re-authenticate — you\'ll be taken to Google to approve the new scope, then brought back to MailMind. ' +
+                    'Your meeting details won\'t be saved, so jot them down first if needed.'
+                );
+                if (confirmed) window.location.href = '/login/with-calendar';
+                status.textContent = '';
+                btn.disabled = false;
+                return;
+            }
+
+            if (data.error) {
+                status.textContent = '✗ ' + data.error;
+                btn.disabled = false;
+                return;
+            }
+
+            status.textContent = '✓ Meeting created!';
+
+            // Add to calendar dots immediately
+            const dateStr = datetimeVal.slice(0, 10); // YYYY-MM-DD from datetime-local value
+            meetingDates.add(dateStr);
+            renderCalendar(currentDate);
+
+            // Track locally so the Meetings view can show it right away
+            createdMeetings.unshift({
+                title, description,
+                date: dateStr,
+                time: datetimeVal.slice(11, 16),
+                platform: data.platform,
+                meeting_link: data.meeting_link,
+                event_link: data.event_link,
+                attendees,
+                email_sent: data.email_result ? !!data.email_result.sent : false,
+            });
+            renderCreatedMeetings();
+
+            setTimeout(closeMeetingModal, 1200);
+        } catch (err) {
+            status.textContent = '✗ Network error';
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('meeting-create-btn').addEventListener('click', createMeeting);
+
+    // Render the locally-tracked "just created" meetings above the AI
+    // meetings list panel, so the user sees them instantly without waiting
+    // for the next "Extract Meetings" AI run.
+    function renderCreatedMeetings() {
+        const panel = document.getElementById('created-meetings-panel');
+        if (createdMeetings.length === 0) { panel.classList.add('hidden'); panel.innerHTML = ''; return; }
+        panel.classList.remove('hidden');
+        panel.innerHTML = `
+            <p class="text-[10px] uppercase tracking-wider font-bold text-sky-400 mb-2 px-1">Created by you</p>
+            <div class="space-y-2">
+            ${createdMeetings.map(m => `
+                <div class="p-3 bg-sky-950/15 border border-sky-800/30 rounded-xl flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="text-xs font-semibold text-slate-200 truncate">${escapeHtml(m.title)}</p>
+                        <p class="text-[10px] text-sky-400 font-mono mt-0.5">${escapeHtml(m.date)} · ${escapeHtml(m.time)} · ${escapeHtml(m.platform)}</p>
+                        ${m.attendees ? `<p class="text-[10px] text-slate-500 mt-0.5 truncate">To: ${escapeHtml(m.attendees)}</p>` : ''}
+                        ${m.email_sent ? '<p class="text-[10px] text-emerald-400 mt-0.5">✓ Invite emailed</p>' : ''}
+                    </div>
+                    <div class="flex flex-col gap-1 shrink-0">
+                        ${m.meeting_link ? `<a href="${escapeHtml(m.meeting_link)}" target="_blank" rel="noopener" class="text-[10px] bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 px-2 py-1 rounded-lg transition font-medium text-center">Join</a>` : ''}
+                        ${m.event_link ? `<a href="${escapeHtml(m.event_link)}" target="_blank" rel="noopener" class="text-[10px] bg-[#1a1830] hover:bg-indigo-600/30 text-slate-400 hover:text-indigo-300 px-2 py-1 rounded-lg transition font-medium text-center">Calendar</a>` : ''}
+                    </div>
+                </div>
+            `).join('')}
+            </div>`;
+        lucide.createIcons();
+    }
+
+    // ─────────────────────────────────────────────
+    // 3D AUTO-SCROLL CARD CAROUSEL
+    // ─────────────────────────────────────────────
+    (function () {
+        const cards = Array.from(document.querySelectorAll('.deck-card'));
+        const stage = document.querySelector('.card-perspective');
+        const n = cards.length;
+        const SPACING = 95;      // px between slots
+        const SPEED = 0.00065;   // slots per ms
+        const SCALE_FALLOFF = 0.16;
+        const OPACITY_FALLOFF = 0.4;
+        const BLUR_FALLOFF = 1.4;
+
+        // positions are continuous "slot" values; start evenly spaced, center card at 0
+        let positions = cards.map((_, i) => i - (n - 1) / 2);
+        let paused = false;
+        let lastT = null;
+
+        function render() {
+            positions.forEach((p, i) => {
+                const ty = p * SPACING;
+                const dist = Math.abs(p);
+                const scale = Math.max(0.55, 1 - dist * SCALE_FALLOFF);
+                const opacity = Math.max(0, 1 - dist * OPACITY_FALLOFF);
+                const blur = Math.min(4, dist * BLUR_FALLOFF);
+                const z = Math.round(100 - dist * 10);
+                const card = cards[i];
+                card.style.transform = `translateY(${ty}px) scale(${scale})`;
+                card.style.opacity = opacity;
+                card.style.filter = blur > 0.05 ? `blur(${blur}px)` : 'none';
+                card.style.zIndex = z;
+                card.style.pointerEvents = dist < 0.5 ? 'auto' : 'none';
+            });
+        }
+
+        function tick(t) {
+            if (lastT === null) lastT = t;
+            const dt = t - lastT;
+            lastT = t;
+            if (!paused) {
+                positions = positions.map(p => {
+                    let next = p - SPEED * dt;
+                    // wrap seamlessly once a card drifts fully out of view
+                    if (next < -(n - 1) / 2 - 0.5) next += n;
+                    return next;
+                });
+            }
+            render();
+            requestAnimationFrame(tick);
+        }
+
+        if (stage) {
+            stage.addEventListener('mouseenter', () => { paused = true; });
+            stage.addEventListener('mouseleave', () => { paused = false; });
+        }
+
+        requestAnimationFrame(tick);
+    })();
+    // ─────────────────────────────────────────────
+    // SEARCH ENGINE (Fuse.js client-side + server fallback)
+    // ─────────────────────────────────────────────
+    // emailCache, searchTimers, searchInFlight are declared at the top of this script.
+
+    const fuseOptions = {
+        keys: [
+            { name: 'subject', weight: 0.5 },
+            { name: 'from',    weight: 0.3 },
+            { name: 'snippet', weight: 0.2 },
+        ],
+        threshold: 0.35,   // 0 = exact, 1 = anything — 0.35 is "typo-tolerant"
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+    };
+
+    function handleSearch(inputEl, folder, containerId) {
+        const q = inputEl.value.trim();
+        const el = document.getElementById(containerId);
+        if (!el) return;
+
+        clearTimeout(searchTimers[containerId]);
+
+        if (!q) {
+            // Empty query → restore cached list
+            const cached = emailCache[containerId];
+            if (cached) renderEmailList(cached, containerId, folder);
+            return;
+        }
+
+        // ── Step 1: instant client-side Fuse.js filter ──
+        const cached = emailCache[containerId];
+        if (cached && cached.length) {
+            const fuse = new Fuse(cached, fuseOptions);
+            const results = fuse.search(q).map(r => r.item);
+            renderEmailList(results, containerId, folder, true /* show shimmer */);
+        }
+
+        // ── Step 2: debounced server-side Gmail search (~250ms) ──
+        searchTimers[containerId] = setTimeout(async () => {
+            searchInFlight[containerId] = true;
+            try {
+                const url = `/api/search?q=${encodeURIComponent(q)}&folder=${folder}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.error) return;
+                // Only update if the input still has the same query
+                if (inputEl.value.trim() !== q) return;
+                renderEmailList(data.emails || [], containerId, folder);
+            } catch (_) {
+                // silent — client-side results already shown
+            } finally {
+                searchInFlight[containerId] = false;
+                // remove shimmer overlay
+                const shimmer = document.getElementById('shimmer-' + containerId);
+                if (shimmer) shimmer.remove();
+            }
+        }, 250);
+    }
+
+    function renderEmailList(emails, containerId, folder, withShimmer = false) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (emails.length === 0) {
+            el.innerHTML = '<div class="p-8 text-center text-slate-500 text-sm">No emails match your search.</div>';
+            return;
+        }
+        el.innerHTML = emails.map(e => emailRowHTML(e)).join('');
+        if (withShimmer) {
+            // Overlay a translucent shimmer while server result is pending
+            let shimmer = document.getElementById('shimmer-' + containerId);
+            if (!shimmer) {
+                shimmer = document.createElement('div');
+                shimmer.id = 'shimmer-' + containerId;
+                shimmer.className = 'search-shimmer';
+                el.style.position = 'relative';
+                el.appendChild(shimmer);
+            }
+        }
+        lucide.createIcons();
+    }
+
+    function focusSearch(id) {
+        const el = document.getElementById(id);
+        if (el) { el.focus(); el.select(); }
+    }
+
+    // ─────────────────────────────────────────────
+    // REPLY COMPOSE BOX
+    // ─────────────────────────────────────────────
+    // Track which reply boxes are open (only one at a time)
+    let openReplyId = null;
+
+    function toggleReply(emailId) {
+        const meta = _emailMeta[emailId] || {};
+        // Close any open reply first
+        if (openReplyId && openReplyId !== emailId) {
+            closeReply(openReplyId);
+        }
+        const box = document.getElementById('reply-' + emailId);
+        if (!box) return;
+
+        if (box.classList.contains('open')) {
+            closeReply(emailId);
+            return;
+        }
+
+        // Build the quote block
+        const quoteEl = document.getElementById('quote-' + emailId);
+        if (quoteEl) {
+            quoteEl.textContent = `On ${meta.date || '(date unknown)'}, ${meta.from || 'Unknown'} wrote:\n[original message]`;
+        }
+
+        const ta = document.getElementById('reply-body-' + emailId);
+        if (ta) { ta.value = ''; ta.focus(); }
+
+        box.classList.add('open');
+        openReplyId = emailId;
+        lucide.createIcons();
+    }
+
+    function closeReply(emailId) {
+        const box = document.getElementById('reply-' + emailId);
+        if (box) box.classList.remove('open');
+        if (openReplyId === emailId) openReplyId = null;
+    }
+
+    async function sendReply(emailId) {
+        const meta   = _emailMeta[emailId] || {};
+        const ta     = document.getElementById('reply-body-' + emailId);
+        const status = document.getElementById('reply-status-' + emailId);
+        const btn    = document.querySelector(`#reply-${emailId} .reply-btn-send`);
+        if (!ta || !status || !btn) return;
+
+        const body = ta.value.trim();
+        if (!body) { status.textContent = 'Please write something first.'; return; }
+
+        // Extract plain email address from "Name <addr@domain>" format
+        const toMatch = (meta.from || '').match(/<([^>]+)>/) || [];
+        const to = toMatch[1] || meta.from || '';
+
+        btn.disabled = true;
+        status.textContent = 'Sending…';
+
+        try {
+            const res = await fetch('/api/reply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    thread_id:  emailId,
+                    message_id: '',
+                    to,
+                    subject:    meta.subject || '',
+                    body,
+                }),
+            });
+            const data = await res.json();
+
+            if (data.needs_reauth) {
+                const confirmed = confirm(
+                    'Sending emails requires an additional Google permission (gmail.send).\n\n' +
+                    'Click OK to re-authenticate — you\'ll be taken to Google to approve the new scope, then brought back to MailMind. ' +
+                    'Your draft won\'t be saved, so jot it down first if needed.'
+                );
+                if (confirmed) window.location.href = '/login/with-send';
+                status.textContent = '';
+                btn.disabled = false;
+                return;
+            }
+
+            if (data.error) {
+                status.textContent = '✗ ' + data.error;
+                btn.disabled = false;
+                return;
+            }
+
+            status.textContent = '✓ Sent!';
+            ta.value = '';
+            setTimeout(() => closeReply(emailId), 1800);
+        } catch (err) {
+            status.textContent = '✗ Network error';
+            btn.disabled = false;
+        }
+    }
+
+    </script>
+</body>
+</html>

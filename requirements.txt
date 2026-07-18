@@ -1,0 +1,12 @@
+flask
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-dotenv
+requests
+langchain==0.3.27
+langchain-groq==0.2.5
+langchain-core==0.3.79
+apscheduler
+langchain-openai
