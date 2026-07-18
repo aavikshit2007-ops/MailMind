@@ -8,7 +8,7 @@
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![LangChain](https://img.shields.io/badge/LangChain-Agentic_AI-1C3C3C)](https://python.langchain.com/)
 [![Gmail API](https://img.shields.io/badge/Gmail_API-OAuth_2.0-EA4335?logo=gmail&logoColor=white)](https://developers.google.com/gmail/api)
-[![License](https://img.shields.io/badge/License-Not_yet_added-lightgrey)](#license)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **MailMind turns a crowded Gmail inbox into an AI-assisted workspace.** It connects through Google OAuth, retrieves Gmail data, identifies important messages, extracts meetings, categorizes mail, creates digests, searches the inbox, drafts replies, sends email after confirmation, and can create Google Calendar events.
 
@@ -41,13 +41,13 @@ MailMind provides one interface for:
 
 ### Landing page
 
-![MailMind landing page](docs/screenshots/landing-page.png)
+![MailMind landing page](docs/screenshots/index.png)
 
 ### Dashboard
 
 ![MailMind dashboard](docs/screenshots/dashboard.png)
 
-The screenshots above are generated from the current project templates. Dynamic Gmail counts remain empty until a Google account is connected and the backend APIs return real data.
+The screenshots show the current MailMind landing page and AI email dashboard. Dynamic Gmail data appears after a Google account is connected and the backend APIs return live results.
 
 ---
 
@@ -230,7 +230,7 @@ MailMind/
 ├── mailmind.db               # Generated locally; never commit
 ├── docs/
 │   └── screenshots/
-│       ├── landing-page.png
+│       ├── index.png
 │       └── dashboard.png
 └── templates/
     ├── index.html
@@ -545,9 +545,9 @@ git push
 
 ## License
 
-No license file is currently included. Until a licence is added, normal copyright restrictions apply and others do not automatically receive permission to copy, modify, or distribute the project.
+MailMind is open-source software released under the [MIT License](LICENSE).
 
-For an open-source release, add a `LICENSE` file such as MIT, Apache-2.0, or another licence that matches the intended use.
+You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the software, subject to the conditions stated in the licence.
 
 ---
 
